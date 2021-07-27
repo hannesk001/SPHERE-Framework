@@ -4,7 +4,9 @@ namespace SPHERE\Application\Transfer\Import\Standard;
 use DateTime;
 use Exception;
 use MOC\V\Component\Document\Component\Bridge\Repository\PhpExcel;
+use MOC\V\Component\Document\Component\Bridge\Repository\UniversalXml;
 use MOC\V\Component\Document\Document;
+use MOC\V\Component\Document\Vendor\UniversalXml\Source\Node;
 use PHPExcel_Shared_Date;
 use SPHERE\Application\Billing\Accounting\Debtor\Debtor;
 use SPHERE\Application\Contact\Address\Address;
@@ -53,6 +55,7 @@ use SPHERE\Common\Frontend\Text\Repository\Muted;
 use SPHERE\Common\Frontend\Text\Repository\Small;
 use SPHERE\Common\Frontend\Text\Repository\Success as SuccessText;
 use SPHERE\Common\Frontend\Text\Repository\Warning as WarningText;
+use SPHERE\System\Extension\Repository\Debugger;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
@@ -66,6 +69,52 @@ class Service
     private $Location = array();
     /** @var PhpExcel $Document */
     private $Document = null;
+
+    /**
+     * @param IFormInterface|null $Form
+     * @param UploadedFile|null   $File
+     * @param array|null          $Data
+     *
+     * @return string
+     */
+    public function createStudentPlanFromFile(IFormInterface $Form = null, UploadedFile $File = null, $Data = null)
+    {
+        /**
+         * Skip to Frontend
+         */
+        if (null === $File) {
+            return $Form;
+        }
+
+        if ($File->getError()) {
+            $Form->setError('File', 'Fehler');
+            $Form->appendGridGroup(new FormGroup(new FormRow(new FormColumn(new Danger('File nicht gefunden')))));
+
+            return $Form;
+        }
+
+        /**
+         * Prepare
+         */
+        $File = $File->move($File->getPath(), $File->getFilename() . '.' . $File->getClientOriginalExtension());
+
+        /**
+         * Read
+         */
+        //$File->getMimeType()
+        $this->Document = Document::getDocument($File->getPathname());
+        if (!$this->Document instanceof UniversalXml) {
+            $Form->setError('File', 'Fehler');
+
+            return $Form;
+        }
+
+//        Debugger::screenDump($this->Document->getContent());
+        /** @var Node $test */
+        $test = ($this->Document->getContent());
+        $node = $test->getChild('title');
+        Debugger::screenDump($node->getCode());
+    }
 
     /**
      * @param IFormInterface|null $Form

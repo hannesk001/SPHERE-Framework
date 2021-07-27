@@ -133,6 +133,12 @@ class Import extends Extension implements IModuleInterface
                             new Panel('Indiware-Import für Lehraufträge', $PanelLectureshipImport
                                 , Panel::PANEL_TYPE_INFO)
                             , 4),
+                        new LayoutColumn(
+                            new Panel('Indiware-Import für Studentplan',
+                                new Standard('', '/Transfer/Indiware/Import/StudentCourse/Plan', new Upload()
+                                    , array(), 'Hochladen, danach bearbeiten'),
+                                Panel::PANEL_TYPE_INFO)
+                            , 4),
                     ))
                 ))
             )

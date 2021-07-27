@@ -8,6 +8,7 @@ use SPHERE\Application\Education\Lesson\Subject\Subject;
 use SPHERE\Application\Education\Lesson\Term\Service\Entity\TblYear;
 use SPHERE\Application\Education\Lesson\Term\Term;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Account;
+use SPHERE\Application\Transfer\Import\Standard\ImportStandard;
 use SPHERE\Application\Transfer\Indiware\Import\Service\Entity\TblIndiwareImportStudent;
 use SPHERE\Common\Frontend\Form\Repository\Button\Primary;
 use SPHERE\Common\Frontend\Form\Repository\Field\CheckBox;
@@ -23,6 +24,7 @@ use SPHERE\Common\Frontend\Icon\Repository\ChevronLeft;
 use SPHERE\Common\Frontend\Icon\Repository\ChevronRight;
 use SPHERE\Common\Frontend\Icon\Repository\Disable;
 use SPHERE\Common\Frontend\Icon\Repository\Edit;
+use SPHERE\Common\Frontend\Icon\Repository\Exclamation;
 use SPHERE\Common\Frontend\Icon\Repository\EyeOpen;
 use SPHERE\Common\Frontend\Icon\Repository\Info as InfoIcon;
 use SPHERE\Common\Frontend\Icon\Repository\Listing as ListingIcon;
@@ -104,8 +106,49 @@ class StudentCourse extends Extension implements IFrontendInterface
         Main::getDispatcher()->registerRoute(Main::getDispatcher()->createRoute(
             __CLASS__.'/Import', __CLASS__.'::frontendImportStudentCourse'
         ));
+        Main::getDispatcher()->registerRoute(Main::getDispatcher()->createRoute(
+            __CLASS__.'/Plan', __CLASS__.'::frontendImportStudentPlan'
+        ));
 
 //        parent::registerModule();
+    }
+
+    public function frontendImportStudentPlan($File = null, $Data = null)
+    {
+
+        $Stage = new Stage('Import', 'Stundenplan');
+//        $Stage->addButton(
+//            new Standard(
+//                'Zurück',
+//                '/Transfer/Import',
+//                new ChevronLeft()
+//            )
+//        );
+
+        $Stage->setContent(
+            new Layout(
+                new LayoutGroup(
+                    new LayoutRow(
+                        new LayoutColumn(array(
+                            new Well(
+                                ImportStandard::useService()->createStudentPlanFromFile(
+                                    new Form(new FormGroup(new FormRow(array(
+                                        new FormColumn(
+                                            new FileUpload('File', 'Datei auswählen', 'Datei auswählen', null,
+                                                array('showPreview' => false))
+                                            , 8),
+                                    ))), new Primary('Hochladen'))
+                                    , $File, $Data
+                                )
+                                .new Warning(new Exclamation().' Erlaubte Dateitypen: Excel (XLS,XLSX)')
+                            )
+                        ))
+                    )
+                )
+            )
+        );
+
+        return $Stage;
     }
 
     public function frontendStudentCoursePrepare()
