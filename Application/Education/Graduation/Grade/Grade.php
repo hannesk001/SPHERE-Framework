@@ -42,6 +42,18 @@ class Grade  implements IModuleInterface
         Main::getDisplay()->addModuleNavigation(
             new Link(new Link\Route(__NAMESPACE__.'\Task'), new Link\Name('Notenaufträge'), new Link\Icon(new ClipBoard()))
         );
+        Main::getDisplay()->addModuleNavigation(
+            new Link(new Link\Route(__NAMESPACE__.'\Category\Skill'), new Link\Name('Kategorien'), new Link\Icon(new ClipBoard()))
+        );
+        Main::getDisplay()->addModuleNavigation(
+            new Link(new Link\Route(__NAMESPACE__.'\Skill'), new Link\Name('Kompetenzen verwalten'), new Link\Icon(new ClipBoard()))
+        );
+        Main::getDisplay()->addModuleNavigation(
+            new Link(new Link\Route(__NAMESPACE__.'\Student\Skill\Input'), new Link\Name('Kompetenzen für Schüler vergeben'), new Link\Icon(new ClipBoard()))
+        );
+        Main::getDisplay()->addModuleNavigation(
+            new Link(new Link\Route(__NAMESPACE__.'\DivisionCourse\Skill\Input'), new Link\Name('Kompetenzen für Kurs vergeben'), new Link\Icon(new ClipBoard()))
+        );
 
         /**
          * Route
@@ -181,6 +193,27 @@ class Grade  implements IModuleInterface
         );
         Main::getDispatcher()->registerRoute(
             Main::getDispatcher()->createRoute(__NAMESPACE__ . '\MinimumGradeCount\Destroy', __NAMESPACE__ . '\Frontend::frontendDestroyMinimumGradeCount')
+        );
+
+        // Kompetenzen
+        Main::getDispatcher()->registerRoute(
+            Main::getDispatcher()->createRoute(__NAMESPACE__ . '\Skill', __NAMESPACE__ . '\Frontend::frontendSkill')
+        );
+        Main::getDispatcher()->registerRoute(
+            Main::getDispatcher()->createRoute(__NAMESPACE__ . '\Skill\Add', __NAMESPACE__ . '\Frontend::frontendSkillAdd')
+        );
+        Main::getDispatcher()->registerRoute(
+            Main::getDispatcher()->createRoute(__NAMESPACE__ . '\Category\Skill', __NAMESPACE__ . '\Frontend::frontendSkillCategory')
+        );
+        Main::getDispatcher()->registerRoute(
+            Main::getDispatcher()->createRoute(__NAMESPACE__ . '\Category\Skill\Add', __NAMESPACE__ . '\Frontend::frontendSkillCategoryAdd')
+        );
+
+        Main::getDispatcher()->registerRoute(
+            Main::getDispatcher()->createRoute(__NAMESPACE__ . '\Student\Skill\Input', __NAMESPACE__ . '\Frontend::frontendSkillStudentInput')
+        );
+        Main::getDispatcher()->registerRoute(
+            Main::getDispatcher()->createRoute(__NAMESPACE__ . '\DivisionCourse\Skill\Input', __NAMESPACE__ . '\Frontend::frontendSkillDivisionCourseInput')
         );
     }
 

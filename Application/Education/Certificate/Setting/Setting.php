@@ -35,6 +35,18 @@ class Setting extends Extension implements IModuleInterface
         Main::getDispatcher()->registerRoute(Main::getDispatcher()->createRoute(
             __NAMESPACE__, __NAMESPACE__.'\Frontend::frontendDashboard'
         ));
+        Main::getDispatcher()->registerRoute(Main::getDispatcher()->createRoute(
+            __NAMESPACE__.'\SkillCertificate', __NAMESPACE__.'\Frontend::frontendSkillCertificate'
+        ));
+        Main::getDispatcher()->registerRoute(Main::getDispatcher()->createRoute(
+            __NAMESPACE__.'\SkillCertificate\Add', __NAMESPACE__.'\Frontend::frontendSkillCertificateAdd'
+        ));
+        Main::getDispatcher()->registerRoute(Main::getDispatcher()->createRoute(
+            __NAMESPACE__.'\SkillCertificate\Sort', __NAMESPACE__.'\Frontend::frontendSkillCertificateSort'
+        ));
+        Main::getDispatcher()->registerRoute(Main::getDispatcher()->createRoute(
+            __NAMESPACE__.'\SkillCertificate\Preview', __NAMESPACE__.'\Frontend::frontendSkillCertificatePreview'
+        ));
     }
 
     /**

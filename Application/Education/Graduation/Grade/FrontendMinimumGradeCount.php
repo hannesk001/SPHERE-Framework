@@ -152,40 +152,7 @@ class FrontendMinimumGradeCount extends FrontendGradeType
         $courseList[] = new SelectBoxItem(SelectBoxItem::COURSE_ADVANCED, 'Leistungskurs');
         $courseList[] = new SelectBoxItem(SelectBoxItem::COURSE_BASIC, 'Grundkurs');
 
-        $schoolTypeList = array();
-        if (($tblSchoolTypeListFromConsumer = School::useService()->getConsumerSchoolTypeAll())) {
-            foreach ($tblSchoolTypeListFromConsumer as $tblSchoolType) {
-                $minLevel = $tblSchoolType->getMinLevel();
-                $maxLevel = $tblSchoolType->getMaxLevel();
-                for ($level = $minLevel; $level <= $maxLevel; $level++) {
-                    $schoolTypeList[$tblSchoolType->getId()][$level]
-                        = new CheckBox('Data[Levels][' . $tblSchoolType->getId() . '][' . $level . ']', $level, 1);
-                }
-            }
-        }
-
-        $levelColumns = array();
-        foreach ($schoolTypeList as $typeId => $levels) {
-            if (($tblTypeItem = Type::useService()->getTypeById($typeId))) {
-//                ksort($levels);
-                // für Sortierung
-                if ($tblTypeItem->getName() == 'Grundschule') {
-                    $key = 1;
-                } elseif ($tblTypeItem->getName() == TblType::IDENT_OBER_SCHULE) {
-                    $key = 2;
-                } elseif ($tblTypeItem->getName() == 'Gymnasium') {
-                    $key = 3;
-                } else {
-                    $key = 10 + $typeId;
-                }
-                // erstes Element wird ignoriert, deswegen wird ein "inhaltsleeres" vorn angefügt.
-                array_unshift($levels, 'null');
-                $levelColumns[$key] = new LayoutColumn(
-                    new Panel($tblTypeItem->getName(), $levels), 3
-                );
-            }
-        }
-        ksort($levelColumns);
+        $levelColumns = $this->getLevelColumns();
 
         if (($tblSubjectAll = Subject::useService()->getSubjectAll())) {
             $tblSubjectAll = $this->getSorter($tblSubjectAll)->sortObjectBy('Name');
@@ -241,6 +208,49 @@ class FrontendMinimumGradeCount extends FrontendGradeType
                 )),
             ))
         )));
+    }
+
+    /**
+     * @return array
+     */
+    public function getLevelColumns(): array
+    {
+        $schoolTypeList = array();
+        if (($tblSchoolTypeListFromConsumer = School::useService()->getConsumerSchoolTypeAll())) {
+            foreach ($tblSchoolTypeListFromConsumer as $tblSchoolType) {
+                $minLevel = $tblSchoolType->getMinLevel();
+                $maxLevel = $tblSchoolType->getMaxLevel();
+                for ($level = $minLevel; $level <= $maxLevel; $level++) {
+                    $schoolTypeList[$tblSchoolType->getId()][$level]
+                        = new CheckBox('Data[Levels][' . $tblSchoolType->getId() . '][' . $level . ']', $level, 1);
+                }
+            }
+        }
+
+        $levelColumns = array();
+        foreach ($schoolTypeList as $typeId => $levels) {
+            if (($tblTypeItem = Type::useService()->getTypeById($typeId))) {
+//                ksort($levels);
+                // für Sortierung
+                if ($tblTypeItem->getName() == 'Grundschule') {
+                    $key = 1;
+                } elseif ($tblTypeItem->getName() == TblType::IDENT_OBER_SCHULE) {
+                    $key = 2;
+                } elseif ($tblTypeItem->getName() == 'Gymnasium') {
+                    $key = 3;
+                } else {
+                    $key = 10 + $typeId;
+                }
+                // erstes Element wird ignoriert, deswegen wird ein "inhaltsleeres" vorn angefügt.
+                array_unshift($levels, 'null');
+                $levelColumns[$key] = new LayoutColumn(
+                    new Panel($tblTypeItem->getName(), $levels), 3
+                );
+            }
+        }
+        ksort($levelColumns);
+
+        return $levelColumns;
     }
 
     /**

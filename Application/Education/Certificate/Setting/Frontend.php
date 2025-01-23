@@ -1,10 +1,13 @@
 <?php
 namespace SPHERE\Application\Education\Certificate\Setting;
 
+use SPHERE\Application\Api\Education\Graduation\Grade\ApiTeacherGroup;
 use SPHERE\Application\Education\Certificate\Generator\Generator;
 use SPHERE\Application\Education\Certificate\Generator\Service\Entity\TblCertificate;
 use SPHERE\Application\Education\Graduation\Grade\Grade;
 use SPHERE\Application\Education\Graduation\Grade\Service\Entity\TblGradeType;
+use SPHERE\Application\Education\Graduation\Gradebook\MinimumGradeCount\SelectBoxItem;
+use SPHERE\Application\Education\Lesson\DivisionCourse\Service\Entity\TblDivisionCourseMemberType;
 use SPHERE\Application\Education\Lesson\Subject\Service\Entity\TblSubject;
 use SPHERE\Application\Education\Lesson\Subject\Subject;
 use SPHERE\Application\Education\School\Course\Course;
@@ -18,6 +21,7 @@ use SPHERE\Common\Frontend\Form\Repository\Button\Primary;
 use SPHERE\Common\Frontend\Form\Repository\Field\CheckBox;
 use SPHERE\Common\Frontend\Form\Repository\Field\HiddenField;
 use SPHERE\Common\Frontend\Form\Repository\Field\SelectBox;
+use SPHERE\Common\Frontend\Form\Repository\Field\TextArea;
 use SPHERE\Common\Frontend\Form\Repository\Field\TextField;
 use SPHERE\Common\Frontend\Form\Repository\Title as FormTitle;
 use SPHERE\Common\Frontend\Form\Structure\Form;
@@ -27,9 +31,13 @@ use SPHERE\Common\Frontend\Form\Structure\FormRow;
 use SPHERE\Common\Frontend\Icon\Repository\ChevronLeft;
 use SPHERE\Common\Frontend\Icon\Repository\Disable;
 use SPHERE\Common\Frontend\Icon\Repository\Document;
+use SPHERE\Common\Frontend\Icon\Repository\Download;
 use SPHERE\Common\Frontend\Icon\Repository\Edit;
 use SPHERE\Common\Frontend\Icon\Repository\Exclamation;
+use SPHERE\Common\Frontend\Icon\Repository\EyeOpen;
 use SPHERE\Common\Frontend\Icon\Repository\Ok;
+use SPHERE\Common\Frontend\Icon\Repository\Plus;
+use SPHERE\Common\Frontend\Icon\Repository\ResizeVertical;
 use SPHERE\Common\Frontend\Icon\Repository\Save;
 use SPHERE\Common\Frontend\Icon\Repository\Select;
 use SPHERE\Common\Frontend\Icon\Repository\Star;
@@ -39,6 +47,7 @@ use SPHERE\Common\Frontend\Layout\Repository\Accordion;
 use SPHERE\Common\Frontend\Layout\Repository\Listing;
 use SPHERE\Common\Frontend\Layout\Repository\Panel;
 use SPHERE\Common\Frontend\Layout\Repository\PullClear;
+use SPHERE\Common\Frontend\Layout\Repository\PullLeft;
 use SPHERE\Common\Frontend\Layout\Repository\PullRight;
 use SPHERE\Common\Frontend\Layout\Repository\Title;
 use SPHERE\Common\Frontend\Layout\Repository\Well;
@@ -46,6 +55,8 @@ use SPHERE\Common\Frontend\Layout\Structure\Layout;
 use SPHERE\Common\Frontend\Layout\Structure\LayoutColumn;
 use SPHERE\Common\Frontend\Layout\Structure\LayoutGroup;
 use SPHERE\Common\Frontend\Layout\Structure\LayoutRow;
+use SPHERE\Common\Frontend\Link\Repository\External;
+use SPHERE\Common\Frontend\Link\Repository\Link;
 use SPHERE\Common\Frontend\Link\Repository\Standard;
 use SPHERE\Common\Frontend\Link\Repository\Success as SuccessLink;
 use SPHERE\Common\Frontend\Message\Repository\Danger;
@@ -1156,6 +1167,215 @@ class Frontend extends Extension implements IFrontendInterface
             '/Education/Certificate/Setting/Implement', null, null,
             'Standardzeugnisse hinzufügen'));
 
+        $text = 'Kompetenz-Zeugnisse verwalten';
+        $Stage->addButton(new Standard($Route == 'SkillCertificate' ? new Edit() . ' ' . $text : $text,
+            '/Education/Certificate/Setting/SkillCertificate', null, null,
+            'Kompetenz-Zeugnisse verwalten'));
+
         return $Stage;
+    }
+
+    public function frontendSkillCertificate(): Stage
+    {
+        $stage = new Stage('Kompetenz-Zeugnisse', 'Übersicht');
+        $stage = self::setSettingMenue($stage, 'SkillCertificate');
+
+        $options = new Standard('', '/Education/Certificate/Setting/SkillCertificate/Add', new Edit(), array(), 'Bearbeiten')
+            . new Standard('', '/Education/Certificate/Setting/SkillCertificate/Sort', new ResizeVertical(), array(), 'Reihenfolge sortieren')
+//            . new Standard('', '/Education/Certificate/Setting/SkillCertificate/Preview', new EyeOpen(), array(), 'Vorschau')
+            . (new External(
+                '',
+                '/Api/Education/Certificate/Generator/Preview',
+                new Download(),
+                array(
+                    'PrepareId' => 92,
+                    'PersonId' => 663,
+                    'Name' => 'Zeugnismuster'
+                ),
+                'Zeugnis als Muster herunterladen'))
+        ;
+
+        $dataList[] = array('Name' => 'GS Klasse 1 und 2', 'Description' => 'Kompetenz-Zeugnis für Klasse 1 und 2', 'Levels' => '1 (GS), 2 (GS)', 'Options' => $options);
+        $dataList[] = array('Name' => 'GS Klasse 3', 'Description' => 'Kompetenz-Zeugnis für Klasse 3', 'Levels' => '3 (GS)', 'Options' => $options);
+        $dataList[] = array('Name' => 'GS Klasse 4', 'Description' => 'Kompetenz-Zeugnis für Klasse 4', 'Levels' => '4 (GS)', 'Options' => $options);
+        $dataList[] = array('Name' => 'OS Klasse 5 und 6', 'Description' => 'Kompetenz-Zeugnis für die Oberschule 5 und 6', 'Levels' => '5 (OS), 6 (OS)', 'Options' => $options);
+
+
+        $columns = array(
+            'Name' => 'Name',
+            'Description' => 'Beschreibung',
+            'Levels' => 'Klassenstufen',
+            'Options' => ' '
+        );
+        $interactive = array(
+            'order' => array(
+                array(0, 'asc'),
+//                array(1, 'asc'),
+//                array(2, 'asc')
+            ),
+            'columnDefs' => array(
+//                array('type' => 'de_date', 'targets' => array(0, 1)),
+                array('orderable' => false, 'width' => '100px', 'targets' => -1),
+            ),
+            'responsive' => false
+        );
+        $stage->setContent(
+            (new \SPHERE\Common\Frontend\Link\Repository\Primary('Kompetenz-Zeugnis hinzufügen', '/Education/Certificate/Setting/SkillCertificate/Add', new Plus()))
+            . new TableData($dataList, null, $columns, $interactive)
+        );
+
+        // todo option bearbeiten, reihenfolge (sind einzelne Objecte), vorschau
+
+        return  $stage;
+    }
+
+    public function frontendSkillCertificateAdd(): Stage
+    {
+        $stage = new Stage('Kompetenz-Zeugnis', 'Hinzufügen');
+        $stage = self::setSettingMenue($stage, 'SkillCertificate');
+
+        $stage->setContent(new Well($this->formSkillCertificate()));
+
+        return  $stage;
+    }
+
+    public function formSkillCertificate(): Form
+    {
+        // todo reihenfolge der Kategorien
+        // todo reihenfolge der Kompetenzen
+        // todo reihenfolge der Fächer -> dies wahrscheinlich dann bei den Zeugnissen
+
+        $scoreTypeList[] = new SelectBoxItem(0, '');
+        $scoreTypeList[] = new SelectBoxItem(1, 'Prozent');
+        $scoreTypeList[] = new SelectBoxItem(2, 'Selbstdefiniert 1');
+        $scoreTypeList[] = new SelectBoxItem(3, 'Selbstdefiniert 2');
+
+        return new Form(new FormGroup(array(
+            new FormRow(
+                new FormColumn(
+                    (new TextField('Data[Name]', 'Name', 'Name'))->setRequired(),
+                )
+            ),
+            new FormRow(
+                new FormColumn(
+                    new TextArea('Data[Description]', 'Beschreibung', 'Beschreibung')
+                )
+            ),
+            new FormRow(
+                new FormColumn(array(
+                    new Panel(
+                        'Klassenstufen'  . new DangerText('*'),
+                        new Layout(new LayoutGroup(new LayoutRow(Grade::useFrontend()->getLevelColumns()))),
+                        Panel::PANEL_TYPE_INFO
+                    )
+                )),
+            ),
+            new FormRow(
+                new FormColumn(
+                    (new TextField('Data[Title]', 'Kompetenz-Zeugnis Grundschule', 'Zeugnis Titel'))->setRequired(),
+                )
+            ),
+            new FormRow(
+                new FormColumn(
+                    (new SelectBox('', 'Bewertungssystem', array('{{ Name }}' => $scoreTypeList)))->setRequired(),
+                )
+            ),
+            new FormRow(
+                new FormColumn(
+                    new CheckBox('', 'Eigenes Schullogo anzeigen', 1)
+                )
+            ),
+            new FormRow(
+                new FormColumn(
+                    new CheckBox('', 'Sachsen-Logo anzeigen', 1)
+                )
+            ),
+            new FormRow(
+                new FormColumn(
+                    new CheckBox('', 'Fehlzeiten anzeigen', 1)
+                )
+            ),
+            new FormRow(
+                new FormColumn(
+                    new CheckBox('', 'Bemerkung anzeigen', 1)
+                )
+            ),
+            new FormRow(
+                new FormColumn(
+                    new CheckBox('', 'Zensurenübersicht (Fachnoten) anzeigen', 1)
+                )
+            ),
+
+
+            new FormRow(array(
+                new FormColumn(array(
+                    (new \SPHERE\Common\Frontend\Link\Repository\Primary('Speichern', '/Education/Certificate/Setting/SkillCertificate', new Save())),
+//                        ->ajaxPipelineOnClick(ApiTeacherGroup::pipelineSaveTeacherGroupEdit($DivisionCourseId)),
+                    (new Standard('Abbrechen', '/Education/Certificate/Setting/SkillCertificate', new Disable()))
+//                        ->ajaxPipelineOnClick(ApiTeacherGroup::pipelineLoadViewTeacherGroups())
+                ))
+            )),
+        )));
+    }
+
+    public function frontendSkillCertificateSort(): Stage
+    {
+        $stage = new Stage('Kompetenz-Zeugnis', 'Reihenfolge sortieren');
+        $stage = self::setSettingMenue($stage, 'SkillCertificate');
+
+        $count = 1;
+        $dataList[] = $this->getSortObject($count, 'Logos');
+        $dataList[] = $this->getSortObject($count, 'Zeugnis-Title');
+        $dataList[] = $this->getSortObject($count, 'Schüler, Klassenstufe, Schuljahr');
+        $dataList[] = $this->getSortObject($count, 'Zensurenübersicht');
+
+        $dataList[] = $this->getSortObject($count, 'Überfachliche Kompetenzen', true);
+        $dataList[] = $this->getSortObject($count, 'Deutsch Kompetenzen', true);
+        $dataList[] = $this->getSortObject($count, 'Mathematik Kompetenzen', true);
+
+        $dataList[] = $this->getSortObject($count, 'Bemerkung');
+        $dataList[] = $this->getSortObject($count, 'Fehlzeiten');
+
+        // todo sortieren Kompetenzen innerhalb der Fächer
+        $columns = array(
+            'Number'        => '#',
+            'Name'          => 'Name',
+        );
+
+        $table = new TableData($dataList, null, $columns,
+            array(
+                'rowReorderColumn' => 1,
+                'ExtensionRowReorder' => array(
+                    'Enabled' => true,
+//                    'Url'     => '/Api/Education/ClassRegister/Reorder',
+//                    'Data'    => array('DivisionCourseId' => $DivisionCourseId, 'MemberTypeIdentifier' => $MemberTypeIdentifier)
+                ),
+                'columnDefs' => array(
+                    array('type'  => \SPHERE\Application\Setting\Consumer\Consumer::useService()->getGermanSortBySetting(), 'targets' => 1),
+                    array('width' => '4%', 'targets' => 0),
+                ),
+                'pageLength' => -1,
+                'paging' => false,
+                'info' => false,
+                'searching' => false,
+                'responsive' => false
+            )
+        );
+
+        $stage->setContent(
+            new Panel('Name', 'GS Klasse 1 und 2', Panel::PANEL_TYPE_INFO)
+            . $table
+        );
+
+        return  $stage;
+    }
+
+    private function getSortObject(int &$number, string $name,bool $hasSort = false)
+    {
+        return array(
+            'Number' => $number++,
+            'Name' => new PullClear(new PullLeft(new ResizeVertical() . ' ' . $name . ' ')
+                . ($hasSort ? new PullRight(new Link('Kompetenzen sortieren', '')) : ''))
+        );
     }
 }

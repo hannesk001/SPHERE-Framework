@@ -13,6 +13,7 @@ class SDataPrimary
         self::setGsJOne($Data, '1.1');
         self::setGsJa($Data, '1.3');
         self::setBeGs($Data, 'Anlage 1');
+        self::setSkillCertificate($Data);
     }
 
     /**
@@ -198,4 +199,12 @@ class SDataPrimary
     }
 
 
+    /**
+     * @param Data $Data
+     */
+    private static function setSkillCertificate(Data $Data)
+    {
+        // extra CertificateType
+        $Data->createCertificate('Kompetenz-Zeugnis', '', 'SkillCertificate');
+    }
 }

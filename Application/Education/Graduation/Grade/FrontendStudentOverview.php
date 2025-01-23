@@ -41,7 +41,7 @@ use SPHERE\Common\Frontend\Text\Repository\Info;
 use SPHERE\Common\Frontend\Text\Repository\Muted;
 use SPHERE\Common\Frontend\Text\Repository\Small;
 
-abstract class FrontendStudentOverview extends FrontendScoreType
+abstract class FrontendStudentOverview extends FrontendSkill
 {
     /**
      * @param null $Filter

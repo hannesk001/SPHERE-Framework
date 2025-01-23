@@ -11,6 +11,7 @@ namespace SPHERE\Application\Education\Certificate\Generate;
 use DateTime;
 use SPHERE\Application\Api\Education\Certificate\Generate\ApiGenerate;
 use SPHERE\Application\Education\Certificate\Generator\Generator;
+use SPHERE\Application\Education\Certificate\Generator\Service\Entity\TblCertificateType;
 use SPHERE\Application\Education\Certificate\Prepare\Prepare;
 use SPHERE\Application\Education\Certificate\Setting\Setting;
 use SPHERE\Application\Education\Graduation\Grade\Grade;
@@ -243,6 +244,10 @@ class Frontend extends Extension
                 }
             }
         }
+        $skillCertificateType = new TblCertificateType();
+        $skillCertificateType->setId(-1);
+        $skillCertificateType->setName('Kompetenz-Zeugnis');
+        $certificateTypeList[] = $skillCertificateType;
 
         $Global = $this->getGlobal();
         if (!$Global->POST) {
