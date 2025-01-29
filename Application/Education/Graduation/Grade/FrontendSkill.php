@@ -2,6 +2,7 @@
 
 namespace SPHERE\Application\Education\Graduation\Grade;
 
+use SPHERE\Application\Education\Graduation\Gradebook\MinimumGradeCount\SelectBoxItem;
 use SPHERE\Application\Education\Lesson\DivisionCourse\DivisionCourse;
 use SPHERE\Application\Education\Lesson\Subject\Service\Entity\TblSubject;
 use SPHERE\Application\Education\Lesson\Subject\Subject;
@@ -67,6 +68,18 @@ class FrontendSkill extends FrontendScoreType
             $dataList[] = array('Subject' => 'MA', 'Levels' => '3 (GS), 4 (GS)', 'Category' => '', 'Skill' => 'Du löst Sachaufgaben und Aufgaben mit Größen (Geld, Gewicht, Länge und Zeit).');
             $dataList[] = array('Subject' => 'MA', 'Levels' => '3 (GS), 4 (GS)', 'Category' => '', 'Skill' => 'Du benennst räumliche Beziehungen, geometrische Formen und Körper sowie deren Abbildungen und stellst sie dar.');
         }
+
+        return $dataList;
+    }
+
+    public function getSkillCategories(): array
+    {
+        $dataList[] = array('Id' => 0, 'Name' => 'Selbstkonzept', 'Description' => '');
+        $dataList[] = array('Id' => 2, 'Name' => 'Motivation', 'Description' => '');
+        $dataList[] = array('Id' => 3, 'Name' => 'Lernmethodische Kompetenzen', 'Description' => '');
+        $dataList[] = array('Id' => 4, 'Name' => 'Sozial-kommunikative Kompetenzen', 'Description' => '');
+        $dataList[] = array('Id' => 5, 'Name' => 'Sprechen und Zuhören', 'Description' => '');
+        $dataList[] = array('Id' => 6, 'Name' => 'Lesen', 'Description' => '');
 
         return $dataList;
     }
@@ -142,6 +155,12 @@ class FrontendSkill extends FrontendScoreType
 
     public function formSkill(): Form
     {
+        $categories = array();
+        $tempList = $this->getSkillCategories();
+        foreach ($tempList as $category) {
+            $categories[] = new SelectBoxItem($category['Id'], $category['Name']);
+        }
+
         return new Form(new FormGroup(array(
             new FormRow(
                 new FormColumn(
@@ -150,7 +169,7 @@ class FrontendSkill extends FrontendScoreType
             ),
             new FormRow(array(
                 new FormColumn(
-                    new SelectBox('Data[CategorySelect]', 'Kategorie auswählen', array('{{ Name }}' => array()))
+                    new SelectBox('Data[CategorySelect]', 'Kategorie auswählen', array('{{ Name }}' => $categories))
                     , 6),
                 new FormColumn(
                     new TextField('Data[CategoryNew]', '', 'oder neue Kategorie anlegen')
@@ -185,12 +204,7 @@ class FrontendSkill extends FrontendScoreType
     {
         $stage = new Stage('Kompetenzen-Kategorien', 'Übersicht');
 
-        $dataList[] = array('Name' => 'Selbstkonzept', 'Description' => '');
-        $dataList[] = array('Name' => 'Motivation', 'Description' => '');
-        $dataList[] = array('Name' => 'Lernmethodische Kompetenzen', 'Description' => '');
-        $dataList[] = array('Name' => 'Sozial-kommunikative Kompetenzen', 'Description' => '');
-        $dataList[] = array('Name' => 'Sprechen und Zuhören', 'Description' => '');
-        $dataList[] = array('Name' => 'Lesen', 'Description' => '');
+        $dataList = $this->getSkillCategories();
 
         $columns = array(
             'Name' => 'Name',

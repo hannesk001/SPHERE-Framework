@@ -1287,7 +1287,7 @@ class Frontend extends Extension implements IFrontendInterface
             ),
             new FormRow(
                 new FormColumn(
-                    new CheckBox('', 'Sachsen-Logo anzeigen', 1)
+                    new CheckBox('', 'Bundesland-Logo anzeigen', 1)
                 )
             ),
             new FormRow(
