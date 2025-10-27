@@ -78,6 +78,7 @@ class Setup extends AbstractSetup
     {
         $table = $this->createTable($schema, 'tblProcess');
         $this->createServiceKey($table, new TblAccount(''));
+        $this->createColumn($table, 'DeviceFactor');
         $this->createForeignKey($table, $tblFactor);
         /**
          * null = not attempted

@@ -6,6 +6,7 @@ use Doctrine\ORM\Mapping\Cache;
 use Doctrine\ORM\Mapping\Column;
 use Doctrine\ORM\Mapping\Entity;
 use Doctrine\ORM\Mapping\Table;
+use SPHERE\Application\App\Authentication\Authentication;
 use SPHERE\System\Database\Fitting\Element;
 
 /**
@@ -15,6 +16,11 @@ use SPHERE\System\Database\Fitting\Element;
  */
 class TblFactor extends Element
 {
+    public const NAME_CREDENTIALS = 'Credentials';
+    public const NAME_AUTHENTICATOR_APP = 'AuthenticatorApp';
+    public const NAME_TOKEN = 'Token';
+
+
     public const ATTR_NAME = 'name';
     /**
      * @Column(type="string")
@@ -42,5 +48,13 @@ class TblFactor extends Element
     public function setDescription(?string $description): void
     {
         $this->description = $description;
+    }
+
+    /**
+     * @return array|null
+     */
+    public function getContext(): ?array
+    {
+        return Authentication::useService()->getContextByFactor($this);
     }
 }

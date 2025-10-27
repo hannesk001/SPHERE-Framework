@@ -21,6 +21,7 @@ class TblStep extends Element
 {
     public const ATTR_TBL_FACTOR = 'tblFactor';
     public const SERVICE_TBL_IDENTIFICATION = 'serviceTblIdentification';
+    public const ATTR_SORT_ORDER = 'sortOrder';
     /**
      * @Column(type="bigint")
      */

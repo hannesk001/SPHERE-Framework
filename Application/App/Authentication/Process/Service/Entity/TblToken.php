@@ -18,6 +18,7 @@ use SPHERE\System\Database\Fitting\Element;
 class TblToken extends Element
 {
     public const SERVICE_TBL_ACCOUNT = 'serviceTblAccount';
+    public const ATTR_AUTHENTICATION_TOKEN = 'authenticationToken';
     /**
      * @Column(type="bigint")
      */

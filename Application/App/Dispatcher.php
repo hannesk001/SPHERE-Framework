@@ -19,11 +19,12 @@ class Dispatcher extends Extension implements DispatcherInterface
 {
     private static array $publicRoutes = [
         '/app/authentication/status',
+        '/app/authentication/access-token',
         '/app/authentication/process/sign-in',
         '/app/authentication/process/sign-out',
         '/app/authentication/factor/credentials',
         '/app/authentication/factor/token',
-        '/app/authentication/factor/yubikey',
+        '/app/authentication/factor/authenticator',
     ];
     private static ?IBridgeInterface $router = null;
 

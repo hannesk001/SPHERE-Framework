@@ -20,12 +20,17 @@ use SPHERE\System\Database\Fitting\Element;
 class TblProcess extends Element
 {
     public const SERVICE_TBL_ACCOUNT = 'serviceTblAccount';
+    public const ATTR_DEVICE_FACTOR = 'deviceFactor';
     public const ATTR_TBL_FACTOR = 'tblFactor';
     public const ATTR_IS_SOLVED = 'isSolved';
     /**
      * @Column(type="bigint")
      */
     protected $serviceTblAccount;
+    /**
+     * @Column(type="string")
+     */
+    protected string $deviceFactor;
     /**
      * @Column(type="bigint")
      */
@@ -72,5 +77,23 @@ class TblProcess extends Element
     public function setIsSolved(?bool $isSolved): void
     {
         $this->isSolved = $isSolved;
+    }
+
+    /**
+     * @return string
+     */
+    public function getDeviceFactor(): string
+    {
+        return $this->deviceFactor;
+    }
+
+    /**
+     * @param string $deviceFactor
+     *
+     * @return void
+     */
+    public function setDeviceFactor(string $deviceFactor): void
+    {
+        $this->deviceFactor = $deviceFactor;
     }
 }
