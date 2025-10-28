@@ -7,7 +7,8 @@ use SPHERE\System\Config\Reader\IniReader;
 
 class App
 {
-    private string $secret;
+    private string $secretAuthentication;
+    private string $secretAccess;
 
     function __construct()
     {
@@ -15,11 +16,18 @@ class App
             ->createReader(__DIR__ . '/Configuration.ini', new IniReader())
             ->getConfig();
 
-        $this->secret = ($Configuration->getContainer('APP'))->getContainer('Secret');
+        $app = $Configuration->getContainer('APP');
+        $this->secretAuthentication = $app->getContainer('SecretAuthentication');
+        $this->secretAccess = $app->getContainer('SecretAccess');
     }
 
-    public function getSecret(): string
+    public function getSecretAuthentication(): string
     {
-        return $this->secret;
+        return $this->secretAuthentication;
+    }
+
+    public function getSecretAccess(): string
+    {
+        return $this->secretAccess;
     }
 }
