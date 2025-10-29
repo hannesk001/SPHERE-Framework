@@ -92,9 +92,9 @@ class Setup extends AbstractSetup
     {
         $table = $this->createTable($Schema, 'tblToken');
         $this->createServiceKey($table, new TblAccount(''));
-        $this->createColumn($table, 'authenticationToken', self::FIELD_TYPE_STRING, true);
+        $this->createColumn($table, 'authenticationToken', self::FIELD_TYPE_TEXT, true);
         $this->createColumn($table, 'authenticationTimeout', self::FIELD_TYPE_INTEGER, true);
-        $this->createColumn($table, 'accessToken', self::FIELD_TYPE_STRING, true);
+        $this->createColumn($table, 'accessToken', self::FIELD_TYPE_TEXT, true);
         $this->createColumn($table, 'accessTimeout', self::FIELD_TYPE_INTEGER, true);
     }
 }

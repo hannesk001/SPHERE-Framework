@@ -2,20 +2,19 @@
 
 namespace SPHERE\Application\App\Authentication\Process;
 
-use Exception;
 use SPHERE\Application\App\AppException;
 use SPHERE\Application\App\Authentication\Process\Service\Data;
-use SPHERE\Application\App\Authentication\Process\Service\Entity\Jwt;
+use SPHERE\Application\App\Authentication\Process\Service\Entity\Internal\Jwt;
+use SPHERE\Application\App\Authentication\Process\Service\Entity\Internal\Token;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\TblFactor;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\TblProcess;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\TblStep;
+use SPHERE\Application\App\Authentication\Process\Service\Entity\TblToken;
 use SPHERE\Application\App\Authentication\Process\Service\Setup;
-use SPHERE\Application\App\Response\Code\Response400;
-use SPHERE\Application\App\Response\Code\Response401;
-use SPHERE\Application\App\Response\ResponseInterface;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Account;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Service\Entity\TblAccount;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Service\Entity\TblIdentification;
+use SPHERE\System\App\App;
 use SPHERE\System\Database\Binding\AbstractService;
 
 /**
@@ -23,8 +22,8 @@ use SPHERE\System\Database\Binding\AbstractService;
  */
 class Service extends AbstractService
 {
-    // TODO: secret in config
-    private string $secret = '';
+    const AUTHENTICATION_TOKEN_EXPIRE_IN_DAYS = 30;
+    const ACCESS_TOKEN_EXPIRE_IN_MINUTES = 10;
 
     /**
      * @param bool $doSimulation
@@ -66,7 +65,7 @@ class Service extends AbstractService
      */
     public function updateProcess(TblProcess $tblProcess): bool
     {
-        return (new Data($this->getBinding()))->updateEntity($tblProcess);
+        return (new Data($this->getBinding()))->updateProcess($tblProcess);
     }
 
     /**
@@ -113,26 +112,41 @@ class Service extends AbstractService
     }
 
     /**
+     * @param string $authenticationToken
+     *
+     * @return TblToken|null
+     */
+    public function getTokenByAuthenticationToken(string $authenticationToken): ?TblToken
+    {
+        return (new Data($this->getBinding()))->getTokenByAuthenticationToken($authenticationToken);
+    }
+
+    /**
      * @param TblFactor $tblFactor
      *
      * @return array|null
      */
     public function getContextByFactor(TblFactor $tblFactor): ?array
     {
+        $host = 'https://' . $_SERVER['HTTP_HOST'];
         $context = [
             'name' => $tblFactor->getName(),
             'description' => $tblFactor->getDescription()
         ];
         if (TblFactor::NAME_CREDENTIALS == $tblFactor->getName()) {
-            $context['link'] = 'https://' . $_SERVER['HTTP_HOST'] . '/app/authentication/factor/credentials';
+            $context['link'] = $host . '/app/authentication/factor/credentials';
             $context['parameters'] = ['deviceFactor'];
             $context['data'] = ['username', 'password'];
         } else if (TblFactor::NAME_AUTHENTICATOR_APP == $tblFactor->getName()) {
-            $context['link'] = 'https://' . $_SERVER['HTTP_HOST'] . '/app/authentication/factor/authenticatorApp';
+            $context['link'] = $host . '/app/authentication/factor/authenticator';
             $context['parameters'] = ['deviceFactor', 'credentialIdentifier'];
             $context['data'] = ['password'];
         } else if (TblFactor::NAME_TOKEN == $tblFactor->getName()) {
-            $context['link'] = 'https://' . $_SERVER['HTTP_HOST'] . '/app/authentication/factor/token';
+            $context['link'] = $host . '/app/authentication/factor/token';
+            $context['parameters'] = ['deviceFactor', 'credentialIdentifier'];
+            $context['data'] = ['password'];
+        } else if (TblFactor::NAME_TOKEN_OR_AUTHENTICATOR_APP == $tblFactor->getName()) {
+            $context['link'] = $host . '/app/authentication/factor/token-authenticator';
             $context['parameters'] = ['deviceFactor', 'credentialIdentifier'];
             $context['data'] = ['password'];
         } else {
@@ -153,9 +167,30 @@ class Service extends AbstractService
         if ($tblAccount
             && ($tblAuthenticationList = Account::useService()->getAuthenticationListByAccount($tblAccount))
         ) {
-            // TODO: parallel YubKey and AuthenticatorApp
-            $tblIdentification = $tblAuthenticationList[0]->getTblIdentification();
+            $count = count($tblAuthenticationList);
+            if ($count === 1) {
+                $tblIdentification = $tblAuthenticationList[0]->getTblIdentification();
+            } elseif ($count === 2) {
+                // parallel Token and AuthenticatorApp
+                if (($tblAccount->getHasAuthentication(TblIdentification::NAME_SYSTEM)
+                        || $tblAccount->getHasAuthentication(TblIdentification::NAME_TOKEN))
+                    && $tblAccount->getHasAuthentication(TblIdentification::NAME_AUTHENTICATOR_APP)
+                ) {
+                    return $this->getVirtualIdentificationTokenOrAuthenticatorApp();
+                }
+            }
         }
+
+        return $tblIdentification;
+    }
+
+    /**
+     * @return TblIdentification
+     */
+    public function getVirtualIdentificationTokenOrAuthenticatorApp(): TblIdentification
+    {
+        $tblIdentification = new TblIdentification('Hardware-Schlüssel oder Authenticator App');
+        $tblIdentification->setId(-1);
 
         return $tblIdentification;
     }
@@ -164,89 +199,76 @@ class Service extends AbstractService
      * @param TblAccount $tblAccount
      * @param $deviceFactor
      *
-     * @return string
+     * @return TblToken
      */
-    public function createAuthenticationToken(TblAccount $tblAccount, $deviceFactor): string
+    public function createToken(TblAccount $tblAccount, $deviceFactor): TblToken
     {
+        $AuthenticationToken = $this->createAuthenticationToken($tblAccount, $deviceFactor);
+        $AccessToken = $this->createAccessToken($tblAccount, $deviceFactor);
 
-        // create authentication token
-        $jwt = new Jwt($this->secret);
-        // TODO: add date or something? otherwise the same jwt
-        $payLoad = [
-            'id' => $tblAccount->getId(),
-            'username' => $tblAccount->getUsername(),
-            'deviceFactor' => $deviceFactor
-        ];
-        $authenticationToken = $jwt->encode($payLoad);
+        $tblToken = new TblToken();
+        $tblToken->setServiceTblAccount($tblAccount);
+        $tblToken->setAuthenticationToken($AuthenticationToken->getToken());
+        $tblToken->setAuthenticationTimeout($AuthenticationToken->getTimeout());
+        $tblToken->setAccessToken($AccessToken->getToken());
+        $tblToken->setAccessTimeout($AccessToken->getTimeout());
 
-        // save token
-        (new Data($this->getBinding()))->createToken($tblAccount, $authenticationToken);
-
-        return $authenticationToken;
+        return (new Data($this->getBinding()))->createToken($tblToken);
     }
 
     /**
-     * @param string $credentialDevice
-     * @param string $credentialIdentifier
+     * @param TblToken $tblToken
+     * @param Token $accessToken
      *
-     * @return ResponseInterface|bool
+     * @return bool
      */
-    public function authenticateAuthenticationToken(string $credentialDevice, string $credentialIdentifier): ResponseInterface|bool
+    public function updateToken(TblToken $tblToken, Token $accessToken): bool
     {
-        $headers = null;
-        if (function_exists('getallheaders')) {
-            $headers = getallheaders();
-        } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
-            $headers = ['Authorization' => $_SERVER['HTTP_AUTHORIZATION']];
-        }
-        if (!isset($headers['Authorization']) || !preg_match("/^Bearer\s+(.*)$/", $headers['Authorization'], $matches)) {
-            return new Response400('Incomplete authorization header', ['Authorization' => $headers['Authorization'] ?? null]);
-        }
-        $authenticationToken = $matches[1];
+        return (new Data($this->getBinding()))->updateToken($tblToken, $accessToken);
+    }
 
-        try {
-            $data = (new Jwt($this->secret))->decode($authenticationToken);
+    /**
+     * @param TblAccount $tblAccount
+     * @param $deviceFactor
+     *
+     * @return Token
+     */
+    public function createAuthenticationToken(TblAccount $tblAccount, $deviceFactor): Token
+    {
+        // create authentication token
+        $jwt = new Jwt((new App())->getSecretAuthentication());
+        $timeout = time() + 3600 * 24 * self::AUTHENTICATION_TOKEN_EXPIRE_IN_DAYS;
+        $payLoad = [
+            'accountId' => $tblAccount->getId(),
+            'deviceFactor' => $deviceFactor,
+            'timeout' => $timeout,
+        ];
 
-            if ($data == null) {
-                return new Response401('Invalid signature');
-            }
+        return new Token($jwt->encode($payLoad), $timeout);
+    }
 
-            $id = $data['id'] ?? null;
-            $username = $data['username'] ?? null;
-            $deviceFactor = $data['deviceFactor'] ?? null;
-            if (empty($id) || empty($username) || empty($deviceFactor)
-                || (!$tblAccount = Account::useService()->getAccountByUsername($username))
-                || $id != $tblAccount->getId()
-                || $credentialDevice != $deviceFactor
-                || $credentialIdentifier != $username
-                || !($tblToken = (new Data($this->getBinding()))->getTokenByAccountAndAuthenticationToken($tblAccount, $authenticationToken))
-            ) {
-                return new Response401('Invalid Bearer token');
-            }
+    /**
+     * @param TblAccount $tblAccount
+     * @param $deviceFactor
+     *
+     * @return Token
+     */
+    public function createAccessToken(TblAccount $tblAccount, $deviceFactor): Token
+    {
+        $timeoutDiff = 60 * self::ACCESS_TOKEN_EXPIRE_IN_MINUTES;
 
-            // for test expire
-            $offset = 0; // 3600 * 24 * 30;
-            // bearer token is expired
-            if (time() + $offset > $tblToken->getAuthenticationTimeout()) {
-                // TODO: delete bearer token?
-                return new Response401('Bearer token is expired');
-            }
+        // create session in ssw
+        $tblSession = Account::useService()->createSession($tblAccount, null, $timeoutDiff, $deviceFactor);
+        session_id($tblSession->getSession());
 
-            // TODO: create session
-            // Session in SSW für DB Zugriff
-//            if (($tblSessionList = Account::useService()->getSessionAllByAccount($tblAccount))) {
-//                $tblSession = current($tblSessionList);
-//                session_id($tblSession->getSession());
-//                Account::useService()->refreshSession($tblSession->getSession());
-//            } else {
-//                $tblSession = Account::useService()->createSession($tblAccount);
-//                session_id($tblSession->getSession());
-//            }
-        } catch (Exception $e) {
+        // create authentication token
+        $jwt = new Jwt((new App())->getSecretAccess());
+        $payLoad = [
+            'accountId' => $tblAccount->getId(),
+            'session' => $tblSession->getSession(),
+            'timeout' =>  $tblSession->getTimeout(),
+        ];
 
-            return new Response400($e->getMessage());
-        }
-
-        return true;
+        return new Token($jwt->encode($payLoad), $tblSession->getTimeout());
     }
 }

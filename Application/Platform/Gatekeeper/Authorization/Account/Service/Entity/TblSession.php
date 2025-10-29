@@ -34,6 +34,11 @@ class TblSession extends Element
     protected $tblAccount;
 
     /**
+     * @Column(type="string", nullable=true)
+     */
+    protected ?string $DeviceFactor;
+
+    /**
      * @param string $Session
      */
     public function __construct($Session)
@@ -98,5 +103,23 @@ class TblSession extends Element
     {
 
         $this->Session = $Session;
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getDeviceFactor(): ?string
+    {
+        return $this->DeviceFactor;
+    }
+
+    /**
+     * @param string|null $deviceFactor
+     *
+     * @return void
+     */
+    public function setDeviceFactor(?string $deviceFactor): void
+    {
+        $this->DeviceFactor = $deviceFactor;
     }
 }

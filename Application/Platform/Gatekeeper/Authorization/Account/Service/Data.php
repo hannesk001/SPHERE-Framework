@@ -745,13 +745,14 @@ class Data extends AbstractData
     }
 
     /**
-     * @param TblAccount  $tblAccount
-     * @param null|string $Session
-     * @param integer     $Timeout
+     * @param TblAccount $tblAccount
+     * @param null $Session
+     * @param integer $Timeout
+     * @param string|null $deviceFactor
      *
      * @return TblSession
      */
-    public function createSession(TblAccount $tblAccount, $Session = null, $Timeout = 1800)
+    public function createSession(TblAccount $tblAccount, $Session = null, $Timeout = 1800, ?string $deviceFactor = null)
     {
 
         if (null === $Session) {
@@ -767,6 +768,8 @@ class Data extends AbstractData
         $Entity = new TblSession($Session);
         $Entity->setTblAccount($tblAccount);
         $Entity->setTimeout(time() + $Timeout);
+        $Entity->setDeviceFactor($deviceFactor);
+
         $Manager->saveEntity($Entity);
         Protocol::useService()->createInsertEntry($this->getConnection()->getDatabase(), $Entity);
         return $Entity;

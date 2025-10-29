@@ -56,6 +56,9 @@ class TblStep extends Element
         if (null === $this->serviceTblIdentification) {
             return null;
         }
+        if (-1 === $this->serviceTblIdentification) {
+            return Authentication::useService()->getVirtualIdentificationTokenOrAuthenticatorApp();
+        }
         $entity = Account::useService()->getIdentificationById($this->serviceTblIdentification);
         if (false === $entity) {
             return null;

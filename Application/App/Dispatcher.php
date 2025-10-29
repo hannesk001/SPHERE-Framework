@@ -25,6 +25,7 @@ class Dispatcher extends Extension implements DispatcherInterface
         '/app/authentication/factor/credentials',
         '/app/authentication/factor/token',
         '/app/authentication/factor/authenticator',
+        '/app/authentication/factor/token-authenticator',
     ];
     private static ?IBridgeInterface $router = null;
 
@@ -43,15 +44,16 @@ class Dispatcher extends Extension implements DispatcherInterface
         $path = '/' . strtolower($route->getPath());
 
         if (in_array($path, self::$publicRoutes, true)
-            || Access::useService()->hasAuthorization($path)
+            || Access::useService()->existsRightByName($path)
         ) {
             // Exists already?
             if (in_array($path, self::$router->getRouteList(), true)) {
                 throw new AppException(__CLASS__ . ' > Route already available! (' . $path . ')');
             }
             // Add if restricted (additional check, in case "hasAuthorization" messes up)
+            // TODO: app -> by registerRoute no hasAuthorization, maybe in fetchRoute check for AccessToken
             if (in_array($path, self::$publicRoutes, true)
-                || Access::useService()->existsRightByName($path)
+                || Access::useService()->existsRightByName($path) //Access::useService()->hasAuthorization($path)
             ) {
                 self::$router->addRoute($route);
             } else {

@@ -184,6 +184,7 @@ class Setup extends AbstractSetup
         if (!$this->getConnection()->hasColumn('tblSession', 'Timeout')) {
             $Table->addColumn('Timeout', 'integer');
         }
+        $this->createColumn($Table, 'DeviceFactor', self::FIELD_TYPE_STRING, true);
         $this->getConnection()->addForeignKey($Table, $tblAccount);
         return $Table;
     }

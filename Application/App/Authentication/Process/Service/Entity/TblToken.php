@@ -24,7 +24,7 @@ class TblToken extends Element
      */
     protected $serviceTblAccount;
     /**
-     * @Column(type="string")
+     * @Column(type="text", nullable=true)
      */
     protected ?string $authenticationToken;
     /**
@@ -32,7 +32,7 @@ class TblToken extends Element
      */
     protected ?int $authenticationTimeout;
     /**
-     * @Column(type="string")
+     * @Column(type="text", nullable=true)
      */
     protected ?string $accessToken;
     /**

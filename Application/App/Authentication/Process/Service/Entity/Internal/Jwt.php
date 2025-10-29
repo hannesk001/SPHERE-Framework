@@ -1,10 +1,10 @@
 <?php
 
-namespace SPHERE\Application\App\Authentication\Process\Service\Entity;
+namespace SPHERE\Application\App\Authentication\Process\Service\Entity\Internal;
 
-// https://www.freecodecamp.org/news/php-jwt-authentication-implementation/
 use InvalidArgumentException;
 
+// https://www.freecodecamp.org/news/php-jwt-authentication-implementation/
 class Jwt
 {
     /**

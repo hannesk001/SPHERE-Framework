@@ -1,6 +1,7 @@
 <?php
 namespace SPHERE\System\Database\Binding;
 
+use SPHERE\Application\Platform\System\Protocol\Protocol;
 use SPHERE\System\Database\Filter\Logic\AbstractLogic;
 use SPHERE\System\Database\Fitting\Binding;
 use SPHERE\System\Database\Fitting\Cacheable;
@@ -204,5 +205,97 @@ abstract class AbstractData extends Cacheable
     {
 
         return $this->getConnection()->getEntityManager( $useCache );
+    }
+
+    /**
+     * @param array $tblEntityList
+     *
+     * @return bool
+     */
+    protected function createEntityListBulk(array $tblEntityList): bool
+    {
+        $Manager = $this->getEntityManager();
+
+        foreach ($tblEntityList as $tblEntity) {
+            $Manager->bulkSaveEntity($tblEntity);
+            Protocol::useService()->createInsertEntry($this->getConnection()->getDatabase(), $tblEntity, true);
+        }
+
+        $Manager->flushCache();
+        Protocol::useService()->flushBulkEntries();
+
+        return true;
+    }
+
+    /**
+     * @param array $tblEntityList
+     *
+     * @return bool
+     */
+    protected function updateEntityListBulk(array $tblEntityList): bool
+    {
+        $Manager = $this->getEntityManager();
+
+        /** @var Element $tblElement */
+        foreach ($tblEntityList as $tblElement) {
+            $Manager->bulkSaveEntity($tblElement);
+            /** @var Element $Entity */
+            $Entity = $Manager->getEntityById($tblElement->getEntityShortName(), $tblElement->getId());
+            Protocol::useService()->createUpdateEntry($this->getConnection()->getDatabase(), $Entity, $tblElement, true);
+        }
+
+        $Manager->flushCache();
+        Protocol::useService()->flushBulkEntries();
+
+        return true;
+    }
+
+    /**
+     * @param array $tblEntityList
+     *
+     * @return bool
+     */
+    protected function deleteEntityListBulk(array $tblEntityList): bool
+    {
+        $Manager = $this->getConnection()->getEntityManager();
+
+        /** @var Element $tblElement */
+        foreach ($tblEntityList as $tblElement) {
+            /** @var Element $Entity */
+            $Entity = $Manager->getEntityById($tblElement->getEntityShortName(), $tblElement->getId());
+
+            $Manager->bulkKillEntity($Entity);
+            Protocol::useService()->createDeleteEntry($this->getConnection()->getDatabase(), $Entity, true);
+        }
+
+        $Manager->flushCache();
+        Protocol::useService()->flushBulkEntries();
+
+        return true;
+    }
+
+    /**
+     * @param Element $tblElement
+     * @param array|null $findOneBy
+     *
+     * @return Element
+     */
+    protected function createEntity(Element $tblElement, ?array $findOneBy = null): Element
+    {
+        $Manager = $this->getEntityManager();
+
+        $entity = null;
+        if ($findOneBy) {
+            $entity = $Manager->getEntity($tblElement->getEntityShortName())->findOneBy($findOneBy);
+        }
+
+        if (null === $entity) {
+            $Manager->saveEntity($tblElement);
+            Protocol::useService()->createInsertEntry($this->getConnection()->getDatabase(), $tblElement);
+
+            return $tblElement;
+        }
+
+        return $entity;
     }
 }

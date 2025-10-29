@@ -341,15 +341,16 @@ class Service extends AbstractService
 
     /**
      * @param TblAccount $tblAccount
-     * @param null|string $Session
+     * @param null $Session
      * @param integer $Timeout
+     * @param string|null $deviceFactor
      *
-     * @return Service\Entity\TblSession
+     * @return TblSession
      */
-    public function createSession(TblAccount $tblAccount, $Session = null, $Timeout = 1800)
+    public function createSession(TblAccount $tblAccount, $Session = null, $Timeout = 1800, ?string $deviceFactor = null)
     {
 
-        return (new Data($this->getBinding()))->createSession($tblAccount, $Session, $Timeout);
+        return (new Data($this->getBinding()))->createSession($tblAccount, $Session, $Timeout, $deviceFactor);
     }
 
     /**

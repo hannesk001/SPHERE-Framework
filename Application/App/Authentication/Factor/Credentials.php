@@ -95,8 +95,11 @@ class Credentials implements ModuleInterface
             return new Response401('No sign in available', []);
         }
 
+        $tblToken = Authentication::useService()->createToken($tblAccount, $deviceFactor);
+
         return new Response201([
-            'authenticationToken' => Authentication::useService()->createAuthenticationToken($tblAccount, $deviceFactor),
+            'authenticationToken' => $tblToken->getAuthenticationToken(),
+            'accessToken' => $tblToken->getAccessToken(),
             'credentialIdentifier' => $tblAccount->getUsername()
         ]);
     }

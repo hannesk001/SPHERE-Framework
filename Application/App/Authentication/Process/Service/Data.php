@@ -3,6 +3,8 @@
 namespace SPHERE\Application\App\Authentication\Process\Service;
 
 use Exception;
+use SPHERE\Application\App\Authentication\Authentication;
+use SPHERE\Application\App\Authentication\Process\Service\Entity\Internal\Token;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\TblFactor;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\TblProcess;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\TblStep;
@@ -23,6 +25,7 @@ class Data extends AbstractData
         $tblFactorCredentials = $this->createFactor(TblFactor::NAME_CREDENTIALS, 'Benutzername & Passwort');
         $tblFactorAuthenticatorApp = $this->createFactor(TblFactor::NAME_AUTHENTICATOR_APP, 'Authenticator App');
         $tblFactorToken = $this->createFactor(TblFactor::NAME_TOKEN, 'Hardware-Schlüssel');
+        $tblFactorTokenOrAuthenticatorApp = $this->createFactor(TblFactor::NAME_TOKEN_OR_AUTHENTICATOR_APP, 'Hardware-Schlüssel oder Authenticator App');
 
         $this->createStep(null, $tblFactorCredentials, 1);
         if (($tblIdentification = Account::useService()->getIdentificationByName(TblIdentification::NAME_SYSTEM))) {
@@ -42,6 +45,11 @@ class Data extends AbstractData
         if (($tblIdentification = Account::useService()->getIdentificationByName(TblIdentification::NAME_AUTHENTICATOR_APP))) {
             $this->createStep($tblIdentification, $tblFactorCredentials, 1);
             $this->createStep($tblIdentification, $tblFactorAuthenticatorApp, 2);
+        }
+        // in ssw the identifications are both set
+        if (($tblIdentification = Authentication::useService()->getVirtualIdentificationTokenOrAuthenticatorApp())) {
+            $this->createStep($tblIdentification, $tblFactorCredentials, 1);
+            $this->createStep($tblIdentification, $tblFactorTokenOrAuthenticatorApp, 2);
         }
     }
 
@@ -96,6 +104,32 @@ class Data extends AbstractData
         return $entity;
     }
 
+    /**
+     * @param TblProcess $tblProcess
+     *
+     * @return bool
+     */
+    public function updateProcess(TblProcess $tblProcess): bool
+    {
+        $Manager = $this->getEntityManager();
+        /** @var TblProcess $Entity */
+        $Entity = $Manager->getEntityById('TblProcess', $tblProcess->getId());
+        $Protocol = clone $Entity;
+        if (null !== $Entity) {
+            $Entity->setServiceTblAccount($tblProcess->getServiceTblAccount());
+            $Entity->setTblFactor($tblProcess->getTblFactor());
+            $Entity->setDeviceFactor($tblProcess->getDeviceFactor());
+            $Entity->setIsSolved($tblProcess->getIsSolved());
+
+            $Manager->saveEntity($Entity);
+            Protocol::useService()->createUpdateEntry($this->getConnection()->getDatabase(), $Protocol, $Entity);
+
+            return true;
+        }
+
+        return false;
+    }
+
     public function createStep(?TblIdentification $tblIdentification, TblFactor $tblFactor, ?int $sortOrder): ?TblStep
     {
         $connection = $this->getConnection();
@@ -120,35 +154,41 @@ class Data extends AbstractData
     }
 
     /**
-     * @param TblAccount $tblAccount
-     * @param string $authenticationToken
+     * @param TblToken $tblToken
      *
-     * @return TblToken|null
+     * @return TblToken
      */
-    public function createToken(TblAccount $tblAccount, string $authenticationToken): ?TblToken
+    public function createToken(TblToken $tblToken): TblToken
     {
-        $connection = $this->getConnection();
-        if (null === $connection) {
-            return null;
-        }
-        $manager = $connection->getEntityManager();
-        $entity = $manager->getEntity('TblToken')->findOneBy([
-            TblToken::SERVICE_TBL_ACCOUNT => $tblAccount->getId(),
-            TblToken::ATTR_AUTHENTICATION_TOKEN => $authenticationToken
-        ]);
-        if (null === $entity) {
-            $entity = new TblToken();
-            $entity->setServiceTblAccount($tblAccount);
-            $entity->setAuthenticationToken($authenticationToken);
-            // 1 month
-            $timeout = 3600 * 24 * 30;
-            $entity->setAuthenticationTimeout(time() + $timeout);
+        /** @var TblToken $tblToken */
+        $tblToken = $this->createEntity($tblToken);
 
-            $manager->saveEntity($entity);
-            Protocol::useService()->createInsertEntry($connection->getDatabase(), $entity);
+        return $tblToken;
+    }
+
+    /**
+     * @param TblToken $tblToken
+     * @param Token $accessToken
+     *
+     * @return bool
+     */
+    public function updateToken(TblToken $tblToken, Token $accessToken): bool
+    {
+        $Manager = $this->getEntityManager();
+        /** @var TblToken $Entity */
+        $Entity = $Manager->getEntityById('TblToken', $tblToken->getId());
+        $Protocol = clone $Entity;
+        if (null !== $Entity) {
+            $Entity->setAccessToken($accessToken->getToken());
+            $Entity->setAccessTimeout($accessToken->getTimeout());
+
+            $Manager->saveEntity($Entity);
+            Protocol::useService()->createUpdateEntry($this->getConnection()->getDatabase(), $Protocol, $Entity);
+
+            return true;
         }
 
-        return $entity;
+        return false;
     }
 
     /**
@@ -239,15 +279,13 @@ class Data extends AbstractData
     }
 
     /**
-     * @param TblAccount $tblAccount
      * @param string $authenticationToken
      *
      * @return TblToken|null
      */
-    public function getTokenByAccountAndAuthenticationToken(TblAccount $tblAccount, string $authenticationToken): ?TblToken
+    public function getTokenByAuthenticationToken(string $authenticationToken): ?TblToken
     {
         $criteria = [
-            TblToken::SERVICE_TBL_ACCOUNT => $tblAccount->getId(),
             TblToken::ATTR_AUTHENTICATION_TOKEN => $authenticationToken
         ];
 

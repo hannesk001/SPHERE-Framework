@@ -19,6 +19,7 @@ class TblFactor extends Element
     public const NAME_CREDENTIALS = 'Credentials';
     public const NAME_AUTHENTICATOR_APP = 'AuthenticatorApp';
     public const NAME_TOKEN = 'Token';
+    public const NAME_TOKEN_OR_AUTHENTICATOR_APP = 'TokenOrAuthenticatorApp';
 
 
     public const ATTR_NAME = 'name';
