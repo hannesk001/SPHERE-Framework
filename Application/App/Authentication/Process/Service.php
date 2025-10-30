@@ -3,6 +3,7 @@
 namespace SPHERE\Application\App\Authentication\Process;
 
 use SPHERE\Application\App\AppException;
+use SPHERE\Application\App\Authentication\Authentication;
 use SPHERE\Application\App\Authentication\Process\Service\Data;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\Internal\Jwt;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\Internal\Token;
@@ -11,6 +12,11 @@ use SPHERE\Application\App\Authentication\Process\Service\Entity\TblProcess;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\TblStep;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\TblToken;
 use SPHERE\Application\App\Authentication\Process\Service\Setup;
+use SPHERE\Application\App\Response\Code\Response201;
+use SPHERE\Application\App\Response\Code\Response400;
+use SPHERE\Application\App\Response\Code\Response405;
+use SPHERE\Application\App\Response\Code\Response415;
+use SPHERE\Application\App\Response\ResponseInterface;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Account;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Service\Entity\TblAccount;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Service\Entity\TblIdentification;
@@ -128,32 +134,45 @@ class Service extends AbstractService
      */
     public function getContextByFactor(TblFactor $tblFactor): ?array
     {
-        $host = 'https://' . $_SERVER['HTTP_HOST'];
         $context = [
             'name' => $tblFactor->getName(),
             'description' => $tblFactor->getDescription()
         ];
         if (TblFactor::NAME_CREDENTIALS == $tblFactor->getName()) {
-            $context['link'] = $host . '/app/authentication/factor/credentials';
-            $context['parameters'] = ['deviceFactor'];
-            $context['data'] = ['username', 'password'];
+            $context['link'] = $this->getLink('/app/authentication/factor/credentials', 'POST', ['deviceFactor'], null, ['username', 'password']);
         } else if (TblFactor::NAME_AUTHENTICATOR_APP == $tblFactor->getName()) {
-            $context['link'] = $host . '/app/authentication/factor/authenticator';
-            $context['parameters'] = ['deviceFactor', 'credentialIdentifier'];
-            $context['data'] = ['password'];
+            $context['link'] = $this->getLink('/app/authentication/factor/authenticator', 'POST', ['deviceFactor', 'credentialIdentifier'], null, ['otpCredentialKey']);
         } else if (TblFactor::NAME_TOKEN == $tblFactor->getName()) {
-            $context['link'] = $host . '/app/authentication/factor/token';
-            $context['parameters'] = ['deviceFactor', 'credentialIdentifier'];
-            $context['data'] = ['password'];
+            $context['link'] = $this->getLink('/app/authentication/factor/token', 'POST', ['deviceFactor', 'credentialIdentifier'], null, ['otpCredentialKey']);
         } else if (TblFactor::NAME_TOKEN_OR_AUTHENTICATOR_APP == $tblFactor->getName()) {
-            $context['link'] = $host . '/app/authentication/factor/token-authenticator';
-            $context['parameters'] = ['deviceFactor', 'credentialIdentifier'];
-            $context['data'] = ['password'];
+            $context['link'] = $this->getLink('/app/authentication/factor/token-authenticator', 'POST', ['deviceFactor', 'credentialIdentifier'], null, ['otpCredentialKey']);
         } else {
             return null;
         }
 
         return $context;
+    }
+
+    /**
+     * @param string $route
+     * @param string $method
+     * @param array|null $params
+     * @param array|null $headers
+     * @param array|null $data
+     *
+     * @return array
+     */
+    public function getLink(string $route, string $method = 'GET', ?array $params = null, ?array $headers = null, ?array $data = null): array
+    {
+        $host = 'https://' . $_SERVER['HTTP_HOST'];
+
+        return [
+            'route' => $host . $route,
+            'method' => $method,
+            'params' => $params,
+            'headers' => $headers,
+            'data' => $data,
+        ];
     }
 
     /**
@@ -189,7 +208,8 @@ class Service extends AbstractService
      */
     public function getVirtualIdentificationTokenOrAuthenticatorApp(): TblIdentification
     {
-        $tblIdentification = new TblIdentification('Hardware-Schlüssel oder Authenticator App');
+        $tblIdentification = new TblIdentification('TokenOrAuthenticatorApp');
+        $tblIdentification->setDescription('Hardware-Schlüssel oder Authenticator App');
         $tblIdentification->setId(-1);
 
         return $tblIdentification;
@@ -270,5 +290,164 @@ class Service extends AbstractService
         ];
 
         return new Token($jwt->encode($payLoad), $tblSession->getTimeout());
+    }
+
+    /**
+     * @param string $deviceFactor
+     * @param TblAccount|null $tblAccount
+     *
+     * @return TblFactor|null
+     */
+    public function getNextUnSolvedFactor(string $deviceFactor, ?TblAccount $tblAccount = null): ?TblFactor
+    {
+        if (($tblProcesslist = $this->getAllProcessByDeviceFactor($deviceFactor, $tblAccount))) {
+            foreach ($tblProcesslist as $tblProcess) {
+                if ($tblProcess->getIsSolved() !== true) {
+                    return $tblProcess->getTblFactor();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param string $factorName
+     * @param string $deviceFactor
+     * @param bool|null $isSolved
+     * @param TblAccount|null $tblAccount
+     */
+    public function updateProcessByFactorName(string $factorName, string $deviceFactor, ?bool $isSolved, ?TblAccount $tblAccount = null): void
+    {
+        // by credentials is not yet set the account
+        if (($tblProcesslist = $this->getAllProcessByDeviceFactor($deviceFactor, $factorName == TblFactor::NAME_CREDENTIALS ? null : $tblAccount))) {
+            foreach ($tblProcesslist as $tblProcess) {
+                if ($tblProcess->getTblFactor()->getName() == $factorName) {
+                    $tblProcess->setServiceTblAccount($tblAccount);
+                    $tblProcess->setIsSolved($isSolved);
+
+                    $this->updateProcess($tblProcess);
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * @param string $factorName
+     * @param string|null $deviceFactor
+     * @param string|null $credentialIdentifier
+     * @param bool $isCredentialIdentifierRequired
+     *
+     * @return ResponseInterface|null
+     */
+    public function checkAuthentication(
+        string $factorName, ?string $deviceFactor, ?string $credentialIdentifier = null, bool $isCredentialIdentifierRequired = false
+    ): ?ResponseInterface {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return new Response405('Allowed: POST', [
+                'method' => $_SERVER['REQUEST_METHOD'],
+            ]);
+        }
+        $contentType = isset($_SERVER["CONTENT_TYPE"]) ? trim($_SERVER["CONTENT_TYPE"]) : '';
+        if ($contentType !== 'application/json') {
+            return new Response415('"Only JSON content is supported"', [
+                'contentType' => $contentType,
+            ]);
+        }
+
+        if (empty($deviceFactor)) {
+            return new Response400('Device Factor not provided', [
+                'deviceFactor' => $deviceFactor,
+            ]);
+        }
+
+        $tblAccount = null;
+        if ($isCredentialIdentifierRequired
+            && (empty($credentialIdentifier) || !($tblAccount = Account::useService()->getAccountByUsername($credentialIdentifier)))
+        ) {
+            return new Response400('Credential Identifier not provided', [
+                'credentialIdentifier' => $credentialIdentifier,
+            ]);
+        }
+
+        // check if step is currently required, is it already solved or not yet processList for deviceFactor -> return status-link
+        if (!($tblUnsolvedFactor = Authentication::useService()->getNextUnSolvedFactor($deviceFactor, $tblAccount))
+            || $tblUnsolvedFactor->getName() != $factorName
+        ) {
+            return new Response400(@"$factorName not required", [
+                'link' => Authentication::useService()->getLink('/app/authentication/status', 'GET', ['deviceFactor'])
+            ]);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param string $factorName
+     * @param string|null $deviceFactor
+     * @param string|null $credentialIdentifier
+     * @param string $identificationName
+     * @param TblAccount|null $tblAccountOut
+     * @param string|null $otpCredentialKeyOut
+     *
+     * @return ResponseInterface|null
+     */
+    public function checkAuthenticationOtpCredential(
+        string $factorName, ?string $deviceFactor, ?string $credentialIdentifier, string $identificationName,
+        ?TblAccount &$tblAccountOut, ?string &$otpCredentialKeyOut
+    ): ?ResponseInterface {
+        $response = Authentication::useService()->checkAuthentication($factorName, $deviceFactor, $credentialIdentifier, true);
+        // Authentication failed
+        if ($response instanceof ResponseInterface) {
+            return $response;
+        }
+
+        // JSON content laden
+        $data = json_decode(file_get_contents('php://input'), true);
+        $otpCredentialKeyOut = $data['otpCredentialKey'] ?? null;
+
+        // check identification
+        if (!($tblAccountOut = Account::useService()->getAccountByUsername($credentialIdentifier))
+            || !($tblIdentification = $this->getIdentificationByAccount($tblAccountOut))
+            || $tblIdentification->getName() != $identificationName
+        ) {
+            Authentication::useService()->updateProcessByFactorName($factorName, $deviceFactor, false, $tblAccountOut);
+
+            return new Response400(@"Account does not support $factorName");
+        }
+
+        if (empty($otpCredentialKeyOut)) {
+            Authentication::useService()->updateProcessByFactorName($factorName, $deviceFactor, false, $tblAccountOut);
+
+            return new Response400('OtpCredentialKey not provided');
+        }
+
+        return null;
+    }
+
+    /**
+     * @param string $deviceFactor
+     * @param TblAccount $tblAccount
+     *
+     * @return ResponseInterface
+     */
+    public function sendAuthentication(string $deviceFactor, TblAccount $tblAccount): ResponseInterface
+    {
+        // another step fo authentication is required
+        if (($tblNextFactor = Authentication::useService()->getNextUnSolvedFactor($deviceFactor, $tblAccount))) {
+
+            // only send credentialIdentifier -> than its necessary to get next step over status but logic is simpler
+            return new Response201(['credentialIdentifier' => $tblAccount->getUsername()]); // + $tblNextFactor->getContext());
+        }
+
+        // authentication successful
+        $tblToken = Authentication::useService()->createToken($tblAccount, $deviceFactor);
+
+        return new Response201([
+            'credentialIdentifier' => $tblAccount->getUsername(),
+            'authenticationToken' => $tblToken->getAuthenticationToken(),
+            'accessToken' => $tblToken->getAccessToken(),
+        ]);
     }
 }

@@ -6,6 +6,7 @@ use Exception;
 use SPHERE\Application\App\Authentication\Factor\AuthenticatorApp;
 use SPHERE\Application\App\Authentication\Factor\Credentials;
 use SPHERE\Application\App\Authentication\Factor\Token;
+use SPHERE\Application\App\Authentication\Factor\TokenOrAuthenticatorApp;
 use SPHERE\Application\App\Authentication\Process\Service;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\Internal\Jwt;
 use SPHERE\Application\App\Authentication\Process\SignIn;
@@ -17,16 +18,15 @@ use SPHERE\Application\App\Response\Code\Response405;
 use SPHERE\Application\App\Response\Code\Response501;
 use SPHERE\Application\App\Response\ResponseInterface;
 use SPHERE\Application\App\ServiceInterface;
-use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Account;
 use SPHERE\Common\Main;
 use SPHERE\System\App\App;
 use SPHERE\System\Database\Link\Identifier;
 
-/**
- *
- */
 class Authentication implements ServiceInterface
 {
+    /**
+     * @return void
+     */
     public static function registerApplication(): void
     {
         Main::getDispatcher()::registerRoute(Main::getDispatcher()::createRoute(
@@ -43,8 +43,12 @@ class Authentication implements ServiceInterface
         Credentials::registerModule();
         Token::registerModule();
         AuthenticatorApp::registerModule();
+        TokenOrAuthenticatorApp::registerModule();
     }
 
+    /**
+     * @return Service
+     */
     public static function useService(): Service
     {
         return new Service(new Identifier('Platform', 'App', 'Authentication'),
@@ -55,7 +59,7 @@ class Authentication implements ServiceInterface
     /** @noinspection PhpUnused */
     public static function authenticationStatus(
         ?string $deviceFactor = null,
-        ?string $credentialIdentifier = null
+//        ?string $credentialIdentifier = null
     ): ResponseInterface
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -70,12 +74,13 @@ class Authentication implements ServiceInterface
             ]);
         }
 
-        $tblAccount = !empty($credentialIdentifier) ? Account::useService()->getAccountByUsername($credentialIdentifier) : null;
+        $tblAccount = null;
+        // TODO: is credentialIdentifier necessary?, first login app only deviceFactor required and known
+//        $tblAccount = !empty($credentialIdentifier) ? Account::useService()->getAccountByUsername($credentialIdentifier) : null;
 
-        // TODO: tblProcessList sortOrder?
         if (($tblProcessList = self::useService()->getAllProcessByDeviceFactor($deviceFactor, $tblAccount ?: null))) {
             foreach ($tblProcessList as $tblProcess) {
-                if (!$tblProcess->getIsSolved()) {
+                if ($tblProcess->getIsSolved() !== true) {
                     if (($tblFactor = $tblProcess->getTblFactor())
                         && ($context = $tblFactor->getContext())
                     ) {

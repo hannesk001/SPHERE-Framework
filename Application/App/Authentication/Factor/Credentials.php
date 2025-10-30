@@ -5,15 +5,10 @@ namespace SPHERE\Application\App\Authentication\Factor;
 use SPHERE\Application\App\Authentication\Authentication;
 use SPHERE\Application\App\Authentication\Process\Service\Entity\TblFactor;
 use SPHERE\Application\App\ModuleInterface;
-use SPHERE\Application\App\Response\Code\Response201;
 use SPHERE\Application\App\Response\Code\Response400;
 use SPHERE\Application\App\Response\Code\Response401;
-use SPHERE\Application\App\Response\Code\Response405;
-use SPHERE\Application\App\Response\Code\Response415;
-use SPHERE\Application\App\Response\Code\Response501;
 use SPHERE\Application\App\Response\ResponseInterface;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Account;
-use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Service\Entity\TblAccount;
 use SPHERE\Common\Main;
 
 /**
@@ -21,6 +16,9 @@ use SPHERE\Common\Main;
  */
 class Credentials implements ModuleInterface
 {
+    /**
+     * @return void
+     */
     public static function registerModule(): void
     {
         Main::getDispatcher()::registerRoute(
@@ -30,36 +28,30 @@ class Credentials implements ModuleInterface
         );
     }
 
+    /**
+     * @param string|null $deviceFactor
+     *
+     * @return ResponseInterface
+     */
     public static function handleRequest(
         ?string $deviceFactor = null
     ): ResponseInterface {
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return new Response405('Allowed: POST', [
-                'method' => $_SERVER['REQUEST_METHOD'],
-            ]);
-        }
-        $contentType = isset($_SERVER["CONTENT_TYPE"]) ? trim($_SERVER["CONTENT_TYPE"]) : '';
-        if ($contentType !== 'application/json') {
-            return new Response415('"Only JSON content is supported"', [
-                'contentType' => $contentType,
-            ]);
-        }
+        $factorName = TblFactor::NAME_CREDENTIALS;
 
-        if (empty($deviceFactor)) {
-            return new Response400('Device Factor not provided', [
-                'deviceFactor' => $deviceFactor,
-            ]);
+        $response = Authentication::useService()->checkAuthentication($factorName, $deviceFactor);
+        // Authentication failed
+        if ($response instanceof ResponseInterface) {
+            return $response;
         }
 
         // JSON content laden
         $data = json_decode(file_get_contents('php://input'), true);
-
         $username = $data['username'] ?? null;
         $password = $data['password'] ?? null;
 
         if (empty($username) || empty($password)) {
-            self::updateProcess($deviceFactor, false);
+            Authentication::useService()->updateProcessByFactorName($factorName, $deviceFactor, false);
 
             return new Response400('Credentials not provided', [
                 'username' => $username,
@@ -68,7 +60,7 @@ class Credentials implements ModuleInterface
         }
 
         if (!($tblAccount = Account::useService()->getAccountByCredential($username, $password))) {
-            self::updateProcess($deviceFactor, false);
+            Authentication::useService()->updateProcessByFactorName($factorName, $deviceFactor, false);
 
             return new Response401('Credentials not valid', [
                 'username' => $username,
@@ -76,18 +68,22 @@ class Credentials implements ModuleInterface
             ]);
         }
 
-        self::updateProcess($deviceFactor, true, $tblAccount);
+        // consumer lock
+        if (!($tblConsumer = $tblAccount->getServiceTblConsumer())
+            || ($tblConsumer->getAcronym() !='REF' && $tblConsumer->getAcronym() != 'DEMO')
+        ) {
+            return new Response401('No sign in available for consumer: ' . ($tblConsumer ? $tblConsumer->getAcronym() : ''), []);
+        }
 
+        // before the identification is unknown (only step is credentials) and there maybe more steps required
         if (($tblIdentification = Authentication::useService()->getIdentificationByAccount($tblAccount))
             && ($tblStepList = Authentication::useService()->getAllStepByIdentification($tblIdentification))
         ) {
             foreach ($tblStepList as $tblStep) {
-                if (!Authentication::useService()->getProcessByFactor($tblStep->getTblFactor(), $deviceFactor, $tblAccount)) {
-                    // save process
+                // tblAccount is null by existing steps
+                if (!Authentication::useService()->getProcessByFactor($tblStep->getTblFactor(), $deviceFactor, null)) {
+                    // create process
                     Authentication::useService()->createProcess($tblStep->getTblFactor(), $deviceFactor, $tblAccount);
-
-                    // TODO: set && get next step by MFA
-                    return new Response501(null);
                 }
             }
         } else {
@@ -95,32 +91,8 @@ class Credentials implements ModuleInterface
             return new Response401('No sign in available', []);
         }
 
-        $tblToken = Authentication::useService()->createToken($tblAccount, $deviceFactor);
+        Authentication::useService()->updateProcessByFactorName($factorName, $deviceFactor, true, $tblAccount);
 
-        return new Response201([
-            'authenticationToken' => $tblToken->getAuthenticationToken(),
-            'accessToken' => $tblToken->getAccessToken(),
-            'credentialIdentifier' => $tblAccount->getUsername()
-        ]);
-    }
-
-    /**
-     * @param string $deviceFactor
-     * @param bool|null $isSolved
-     * @param TblAccount|null $tblAccount
-     */
-    private static function updateProcess(string $deviceFactor, ?bool $isSolved, ?TblAccount $tblAccount = null): void
-    {
-        // TODO: check if step is currently required
-        if (($tblProcesslist = Authentication::useService()->getAllProcessByDeviceFactor($deviceFactor, null))) {
-            foreach ($tblProcesslist as $tblProcess) {
-                if ($tblProcess->getTblFactor()->getName() == TblFactor::NAME_CREDENTIALS) {
-                    $tblProcess->setServiceTblAccount($tblAccount);
-                    $tblProcess->setIsSolved($isSolved);
-                    Authentication::useService()->updateProcess($tblProcess);
-                    break;
-                }
-            }
-        }
+        return Authentication::useService()->sendAuthentication($deviceFactor, $tblAccount);
     }
 }

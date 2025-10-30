@@ -14,6 +14,7 @@ use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Service\Entity\
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Service\Entity\TblIdentification;
 use SPHERE\Application\Platform\System\Protocol\Protocol;
 use SPHERE\System\Database\Binding\AbstractData;
+use SPHERE\System\Database\Fitting\Element;
 
 /**
  *
@@ -241,19 +242,25 @@ class Data extends AbstractData
         if (null === $connection) {
             return null;
         }
-        $criteria = [
-            TblProcess::ATTR_DEVICE_FACTOR => $deviceFactor,
-            TblProcess::SERVICE_TBL_ACCOUNT => $tblAccount?->getId()
-        ];
 
+        $criteria = [
+            TblProcess::ATTR_DEVICE_FACTOR => $deviceFactor
+        ];
+        if ($tblAccount) {
+            $criteria[TblProcess::SERVICE_TBL_ACCOUNT] = $tblAccount->getId();
+        }
+
+        // challenge: isSolved can be null or false
 //        if (null !== $isSolved) {
 //            $criteria[TblProcess::ATTR_IS_SOLVED] = $isSolved;
 //        }
+
         /** @var TblProcess[] $entities */
-        $entities = $this->getCachedEntityListBy(__METHOD__, $connection->getEntityManager(), 'TblProcess', $criteria);
+        $entities = $this->getCachedEntityListBy(__METHOD__, $connection->getEntityManager(), 'TblProcess', $criteria, [Element::ENTITY_CREATE => self::ORDER_ASC]);
         if (!$entities) {
             return null;
         }
+
         return $entities;
     }
 
