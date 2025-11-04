@@ -3,6 +3,7 @@ namespace SPHERE\Application\Platform\Gatekeeper\Authorization\Account;
 
 use SPHERE\Application\Contact\Mail\Mail;
 use SPHERE\Application\People\Person\Service\Entity\TblPerson;
+use SPHERE\Application\Platform\Gatekeeper\Authentication\TwoFactorApp\TwoFactorApp;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Access\Service\Entity\TblRole;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Account as GatekeeperAccount;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Service\Data;
@@ -20,10 +21,10 @@ use SPHERE\Application\Platform\Gatekeeper\Authorization\Consumer\Consumer;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Consumer\Service\Entity\TblConsumer;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Token\Service\Entity\TblToken;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Token\Token;
-use SPHERE\Application\Setting\User\Account\Service\Entity\TblUserAccount;
 use SPHERE\Common\Frontend\Ajax\Pipeline;
 use SPHERE\Common\Frontend\Ajax\Template\Notify;
 use SPHERE\Common\Frontend\Form\IFormInterface;
+use SPHERE\Common\Frontend\Message\Repository\Danger;
 use SPHERE\Common\Frontend\Message\Repository\Success;
 use SPHERE\Common\Frontend\Message\Repository\Warning;
 use SPHERE\Common\Window\Redirect;
@@ -1298,5 +1299,38 @@ class Service extends AbstractService
         }
 
         return $tblPerson;
+    }
+
+    /**
+     * @param TblAccount $tblAccount
+     * @param string $otpCredentialKey
+     *
+     * @return bool
+     */
+    public function getIsAuthenticatorAppCredentialKeyCorrect(TblAccount $tblAccount, string $otpCredentialKey): bool
+    {
+        return (new TwoFactorApp())->verifyCode($tblAccount->getAuthenticatorAppSecret(), $otpCredentialKey);
+    }
+
+    /**
+     * @param TblAccount $tblAccount
+     * @param string $otpCredentialKey
+     *
+     * @return bool
+     * @throws \Exception
+     */
+    public function getIsTokenCredentialKeyCorrect(TblAccount $tblAccount, string $otpCredentialKey): bool
+    {
+        // Search for matching Token
+        $Identifier = $this->getModHex($otpCredentialKey)->getIdentifier();
+        if (($tblToken = Token::useService()->getTokenByIdentifier($Identifier))
+            && $tblAccount->getServiceTblToken()
+            && $tblAccount->getServiceTblToken()->getId() == $tblToken->getId()
+            && Token::useService()->isTokenValid($otpCredentialKey)
+        ) {
+            return true;
+        }
+
+        return false;
     }
 }

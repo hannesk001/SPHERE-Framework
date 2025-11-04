@@ -1,6 +1,7 @@
 <?php
 namespace SPHERE\Application\Platform\System\Database;
 
+use SPHERE\Application\App\ServiceInterface;
 use SPHERE\Application\IModuleInterface;
 use SPHERE\Application\IServiceInterface;
 use SPHERE\Application\Platform\Gatekeeper\Authorization\Account\Account;
@@ -625,6 +626,8 @@ class Database extends Extension implements IModuleInterface
         array_unshift(self::$ServiceRegister, 'SPHERE\Application\Platform\Gatekeeper\Authorization\Access\Access');
         array_unshift(self::$ServiceRegister, 'SPHERE\Application\Platform\Gatekeeper\Authorization\Token\Token');
         array_unshift(self::$ServiceRegister, 'SPHERE\Application\Platform\Gatekeeper\Authorization\Consumer\Consumer');
+        array_unshift(self::$ServiceRegister, 'SPHERE\Application\App\Authentication\Authentication');
+        array_unshift(self::$ServiceRegister, 'SPHERE\Application\App\Protocol\Protocol');
 
         self::$ServiceRegister = array_unique(self::$ServiceRegister);
 
@@ -641,7 +644,7 @@ class Database extends Extension implements IModuleInterface
                 if ($Inspection->isInternal()) {
                     $Class = false;
                 } else {
-                    if ($Inspection->implementsInterface('\SPHERE\Application\IModuleInterface')) {
+                    if ($Inspection->implementsInterface('\SPHERE\Application\IModuleInterface') || $Inspection->implementsInterface('\SPHERE\Application\App\ServiceInterface')) {
                         /** @var IModuleInterface $Class */
                         if (!$Inspection->isAbstract()) {
                             $Class = $Inspection->newInstance();
@@ -675,7 +678,7 @@ class Database extends Extension implements IModuleInterface
                 if ($Inspection->isInternal()) {
                     $Class = false;
                 } else {
-                    if ($Inspection->implementsInterface('\SPHERE\Application\IModuleInterface')) {
+                    if ($Inspection->implementsInterface('\SPHERE\Application\IModuleInterface') || $Inspection->implementsInterface('\SPHERE\Application\App\ServiceInterface')) {
                         /** @var IModuleInterface $Class */
                         if (!$Inspection->isAbstract()) {
                             $Class = $Inspection->newInstance();
@@ -724,6 +727,20 @@ class Database extends Extension implements IModuleInterface
                                     self::$SetupUTF8[$Database] = $Class;
                                 }
                             }
+                            // insert Data without doubled work
+                            if (!array_key_exists(get_class($Class), self::$SetupRegister)) {
+                                $Class->setupService(false, true, false);
+                                self::$SetupRegister[get_class($Class)] = true;
+                            }
+                        }
+                    } elseif ($Inspection->implementsInterface('\SPHERE\Application\App\ServiceInterface')) {
+                        /** @var ServiceInterface $Class */
+                        if (!$Inspection->isAbstract()) {
+                            $Class = $Inspection->newInstance();
+                            $Class = $Class->useService();
+                        }
+                        /** @var IServiceInterface $Class */
+                        if ($Class instanceof IServiceInterface){
                             // insert Data without doubled work
                             if (!array_key_exists(get_class($Class), self::$SetupRegister)) {
                                 $Class->setupService(false, true, false);

@@ -664,8 +664,7 @@ class Frontend extends Extension implements IFrontendInterface
             if ($tblAccount->getHasAuthentication(TblIdentification::NAME_AUTHENTICATOR_APP) && strlen($otpCredentialKey) == 6) {
                 // Credential correct, OTP correct -> LOGIN
                 try {
-                    $twoFactorApp = new TwoFactorApp();
-                    if ($twoFactorApp->verifyCode($tblAccount->getAuthenticatorAppSecret(), $otpCredentialKey)) {
+                    if (Account::useService()->getIsAuthenticatorAppCredentialKeyCorrect($tblAccount, $otpCredentialKey)) {
                         // test password is initial?
                         if($isTestInitial && ($ChangeContent = $this->getPasswortChangeTest($tblAccount))){
                             return $ChangeContent;
@@ -697,49 +696,36 @@ class Frontend extends Extension implements IFrontendInterface
                     $FormError = new Listing(array(new Danger(new Exclamation() . ' Die eingegebenen Zugangsdaten sind nicht gültig')));
                 }
             } else {
-                // Search for matching Token
-                $Identifier = $this->getModHex($otpCredentialKey)->getIdentifier();
-                $tblToken = Token::useService()->getTokenByIdentifier($Identifier);
-                if (
-                    $tblToken
-                    && $tblAccount->getServiceTblToken()
-                    && $tblAccount->getServiceTblToken()->getId() == $tblToken->getId()
-                ) {
-                    // Credential correct, Token correct -> LOGIN
-                    try {
-                        if (Token::useService()->isTokenValid($otpCredentialKey)) {
-                            // test password is initial?
-                            if(($ChangeContent = $this->getPasswortChangeTest($tblAccount))){
-                                return $ChangeContent;
-                            }
-                            if (session_status() == PHP_SESSION_ACTIVE) {
-                                session_regenerate_id();
-                            }
-                            Account::useService()->createSession($tblAccount, session_id());
-                            $View->setTitle(new Ok() . ' Anmelden');
-                            $View->setContent(
-                                $this->getIdentificationLayout(
-                                    new Headline('Anmelden', 'Bitte warten...')
-                                    . new Redirect('/', Redirect::TIMEOUT_SUCCESS)
-                                )
-                            );
-                            return $View;
-                        } else {
-                            // Error Token invalid
-                            $otpCredentialKeyField->setError('');
-                            $FormError = new Listing(array(new Danger(new Exclamation() . ' Die eingegebenen Zugangsdaten sind nicht gültig')));
+                // Credential correct, Token correct -> LOGIN
+                try {
+                    if (Account::useService()->getIsTokenCredentialKeyCorrect($tblAccount, $otpCredentialKey)) {
+                        // test password is initial?
+                        if(($ChangeContent = $this->getPasswortChangeTest($tblAccount))){
+                            return $ChangeContent;
                         }
-                    } catch (Exception $Exception) {
-
-                        (new DebuggerFactory())->createLogger(new ErrorLogger())->addLog('YubiKey-Api Error: ' . $Exception->getMessage());
-                        (new DebuggerFactory())->createLogger(new FileLogger())->addLog('YubiKey-Api Error: ' . $Exception->getMessage());
-
-                        // Error Token API Error
+                        if (session_status() == PHP_SESSION_ACTIVE) {
+                            session_regenerate_id();
+                        }
+                        Account::useService()->createSession($tblAccount, session_id());
+                        $View->setTitle(new Ok() . ' Anmelden');
+                        $View->setContent(
+                            $this->getIdentificationLayout(
+                                new Headline('Anmelden', 'Bitte warten...')
+                                . new Redirect('/', Redirect::TIMEOUT_SUCCESS)
+                            )
+                        );
+                        return $View;
+                    } else {
+                        // Error Token invalid
                         $otpCredentialKeyField->setError('');
                         $FormError = new Listing(array(new Danger(new Exclamation() . ' Die eingegebenen Zugangsdaten sind nicht gültig')));
                     }
-                } else {
-                    // Error Token not registered
+                } catch (Exception $Exception) {
+
+                    (new DebuggerFactory())->createLogger(new ErrorLogger())->addLog('YubiKey-Api Error: ' . $Exception->getMessage());
+                    (new DebuggerFactory())->createLogger(new FileLogger())->addLog('YubiKey-Api Error: ' . $Exception->getMessage());
+
+                    // Error Token API Error
                     $otpCredentialKeyField->setError('');
                     $FormError = new Listing(array(new Danger(new Exclamation() . ' Die eingegebenen Zugangsdaten sind nicht gültig')));
                 }
