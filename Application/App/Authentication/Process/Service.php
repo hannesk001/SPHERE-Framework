@@ -14,6 +14,7 @@ use SPHERE\Application\App\Authentication\Process\Service\Entity\TblToken;
 use SPHERE\Application\App\Authentication\Process\Service\Setup;
 use SPHERE\Application\App\Response\Code\Response201;
 use SPHERE\Application\App\Response\Code\Response400;
+use SPHERE\Application\App\Response\Code\Response401;
 use SPHERE\Application\App\Response\Code\Response405;
 use SPHERE\Application\App\Response\Code\Response415;
 use SPHERE\Application\App\Response\ResponseInterface;
@@ -128,6 +129,26 @@ class Service extends AbstractService
     }
 
     /**
+     * @param string $deviceFactor
+     *
+     * @return TblToken|null
+     */
+    public function getTokenByDeviceFactor(string $deviceFactor): ?TblToken
+    {
+        return (new Data($this->getBinding()))->getTokenByDeviceFactor($deviceFactor);
+    }
+
+    /**
+     * @param string $accessToken
+     *
+     * @return TblToken|null
+     */
+    public function getTokenByAccessToken(string $accessToken): ?TblToken
+    {
+        return (new Data($this->getBinding()))->getTokenByAccessToken($accessToken);
+    }
+
+    /**
      * @param TblFactor $tblFactor
      *
      * @return array|null
@@ -228,6 +249,7 @@ class Service extends AbstractService
 
         $tblToken = new TblToken();
         $tblToken->setServiceTblAccount($tblAccount);
+        $tblToken->setDeviceFactor($deviceFactor);
         $tblToken->setAuthenticationToken($AuthenticationToken->getToken());
         $tblToken->setAuthenticationTimeout($AuthenticationToken->getTimeout());
         $tblToken->setAccessToken($AccessToken->getToken());
@@ -285,6 +307,7 @@ class Service extends AbstractService
         $jwt = new Jwt((new App())->getSecretAccess());
         $payLoad = [
             'accountId' => $tblAccount->getId(),
+            'deviceFactor' => $deviceFactor,
             'session' => $tblSession->getSession(),
             'timeout' =>  $tblSession->getTimeout(),
         ];
@@ -449,5 +472,74 @@ class Service extends AbstractService
             'authenticationToken' => $tblToken->getAuthenticationToken(),
             'accessToken' => $tblToken->getAccessToken(),
         ]);
+    }
+
+    /**
+     * @param string $deviceFactor
+     * @param TblAccount|null $tblAccount
+     *
+     * @return void
+     */
+    public function signOut(string $deviceFactor, ?TblAccount $tblAccount): void
+    {
+        $deleteEntityList = [];
+
+        // Remove App-Account-Tokens
+        if (($tblToken = self::getTokenByDeviceFactor($deviceFactor))) {
+            // Remove SSW-PHP-Session, technical not required, delete tblToken is enough
+            if ($tblToken->getAccessToken()) {
+                $data = (new Jwt((new App())->getSecretAccess()))->decode($tblToken->getAccessToken());
+                $session = $data['session'] ?? null;
+                Account::useService()->destroySession(null, $session);
+            }
+
+            $deleteEntityList[] = $tblToken;
+        }
+        // Remove App-Account-Process
+        if (($tblProcessList = self::getAllProcessByDeviceFactor($deviceFactor, $tblAccount))) {
+            $deleteEntityList = array_merge($deleteEntityList, $tblProcessList);
+        }
+
+        (new Data($this->getBinding()))->deleteEntityListBulk($deleteEntityList);
+    }
+
+    /**
+     * @param string $deviceFactor
+     * @param TblAccount|null $tblAccount
+     *
+     * @return array|null
+     */
+    public function createNewProcess(string $deviceFactor, ?TblAccount $tblAccount): ?array
+    {
+        $tblIdentification = $this->getIdentificationByAccount($tblAccount ?: null);
+        if (($tblStepList = $this->getAllStepByIdentification($tblIdentification ?: null))) {
+            $tblStep = $tblStepList[0];
+            if (($tblFactor = $tblStep->getTblFactor())
+                && ($context = $tblFactor->getContext())
+            ) {
+                // save process
+                $this->createProcess($tblFactor, $deviceFactor, $tblAccount ?: null);
+
+                return $context;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param string $deviceFactor
+     * @param TblAccount|null $tblAccount
+     *
+     * @return Response401
+     */
+    public function sendAuthenticationTokenExpired(string $deviceFactor, ?TblAccount $tblAccount): Response401
+    {
+        // authentication token expired -> delete TblToken, Process, session und Co
+        $this->signOut($deviceFactor, $tblAccount);
+
+        $context = $this->createNewProcess($deviceFactor, null);
+
+        return new Response401('Authentication Token expired', $context);
     }
 }

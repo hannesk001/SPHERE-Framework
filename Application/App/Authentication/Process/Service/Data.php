@@ -193,6 +193,16 @@ class Data extends AbstractData
     }
 
     /**
+     * @param array $tblEntityList
+     *
+     * @return bool
+     */
+    public function deleteEntityListBulk(array $tblEntityList): bool
+    {
+        return parent::deleteEntityListBulk($tblEntityList);
+    }
+
+    /**
      * @throws Exception
      */
     public function getFactorById(int $id): ?TblFactor
@@ -294,6 +304,40 @@ class Data extends AbstractData
     {
         $criteria = [
             TblToken::ATTR_AUTHENTICATION_TOKEN => $authenticationToken
+        ];
+
+        /** @var TblToken $tblToken */
+        return ($tblToken = $this->getCachedEntityBy(__METHOD__, $this->getEntityManager(), 'TblToken', $criteria))
+            ? $tblToken
+            : null;
+    }
+
+    /**
+     * @param string $deviceFactor
+     *
+     * @return TblToken|null
+     */
+    public function getTokenByDeviceFactor(string $deviceFactor): ?TblToken
+    {
+        $criteria = [
+            TblToken::ATTR_DEVICE_FACTOR => $deviceFactor
+        ];
+
+        /** @var TblToken $tblToken */
+        return ($tblToken = $this->getCachedEntityBy(__METHOD__, $this->getEntityManager(), 'TblToken', $criteria))
+            ? $tblToken
+            : null;
+    }
+
+    /**
+     * @param string $accessToken
+     *
+     * @return TblToken|null
+     */
+    public function getTokenByAccessToken(string $accessToken): ?TblToken
+    {
+        $criteria = [
+            TblToken::ATTR_ACCESS_TOKEN => $accessToken
         ];
 
         /** @var TblToken $tblToken */

@@ -4,6 +4,8 @@ namespace SPHERE\Application\App;
 
 use MOC\V\Component\Router\Component\IBridgeInterface;
 use MOC\V\Component\Router\Component\Parameter\Repository\RouteParameter;
+use SPHERE\Application\App\Authorization\Authorization;
+use SPHERE\Application\App\Protocol\Protocol;
 use SPHERE\Application\App\Response\Code\Response404;
 use SPHERE\Application\App\Response\Code\Response500;
 use SPHERE\Application\App\Response\ResponseInterface;
@@ -37,6 +39,8 @@ class Dispatcher extends Extension implements DispatcherInterface
     }
 
     /**
+     * @param RouteParameter $route
+     *
      * @throws AppException
      */
     public static function registerRoute(RouteParameter $route): void
@@ -51,7 +55,7 @@ class Dispatcher extends Extension implements DispatcherInterface
                 throw new AppException(__CLASS__ . ' > Route already available! (' . $path . ')');
             }
             // Add if restricted (additional check, in case "hasAuthorization" messes up)
-            // TODO: app -> by registerRoute no hasAuthorization, maybe in fetchRoute check for AccessToken
+            // app -> by registerRoute no hasAuthorization, in fetchRoute check for AccessToken
             if (in_array($path, self::$publicRoutes, true)
                 || Access::useService()->existsRightByName($path) //Access::useService()->hasAuthorization($path)
             ) {
@@ -62,6 +66,12 @@ class Dispatcher extends Extension implements DispatcherInterface
         }
     }
 
+    /**
+     * @param string $path
+     * @param string $controller
+     *
+     * @return RouteParameter
+     */
     public static function createRoute(string $path, string $controller): RouteParameter
     {
         // Map Controller Class to FQN
@@ -78,18 +88,39 @@ class Dispatcher extends Extension implements DispatcherInterface
         return new RouteParameter($path, $controller);
     }
 
+    /**
+     * @param string $path
+     *
+     * @return ResponseInterface
+     */
     public static function fetchRoute(string $path): ResponseInterface
     {
+        $tblRequest = Protocol::useService()->createRequest($path);
+        $isPublicRoute = in_array($path, self::$publicRoutes, true);
+
         $path = trim($path, '/');
         if (in_array($path, self::$router->getRouteList(), true)) {
             try {
-                /** @var ResponseInterface $response */
-                $response = self::$router->getRoute($path);
-                return $response;
+                $response = null;
+                // check authorization if route is not public
+                if (!$isPublicRoute) {
+                    // TODO: method
+                    $response = Authorization::checkAuthorization($tblRequest);
+                }
+                // authorization successful
+                if ($response === null) {
+                    /** @var ResponseInterface $response */
+                    $response = self::$router->getRoute($path);
+                }
             } catch (Throwable $throwable) {
-                return new Response500($throwable->getMessage(), $throwable->getTrace());
+                $response = new Response500($throwable->getMessage(), $throwable->getTrace());
             }
+        } else {
+            $response =  new Response404('Route not found', $path);
         }
-        return new Response404('Route not found', $path);
+
+        Protocol::useService()->createResponse($response, $tblRequest);
+
+        return $response;
     }
 }

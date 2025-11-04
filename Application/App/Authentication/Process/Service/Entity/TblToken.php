@@ -17,28 +17,33 @@ use SPHERE\System\Database\Fitting\Element;
  */
 class TblToken extends Element
 {
-    public const SERVICE_TBL_ACCOUNT = 'serviceTblAccount';
-    public const ATTR_AUTHENTICATION_TOKEN = 'authenticationToken';
+    public const ATTR_DEVICE_FACTOR = 'DeviceFactor';
+    public const ATTR_AUTHENTICATION_TOKEN = 'AuthenticationToken';
+    public const ATTR_ACCESS_TOKEN = 'AccessToken';
     /**
      * @Column(type="bigint")
      */
-    protected $serviceTblAccount;
+    protected int $serviceTblAccount;
+    /**
+     * @Column(type="string")
+     */
+    protected string $DeviceFactor;
     /**
      * @Column(type="text", nullable=true)
      */
-    protected ?string $authenticationToken;
+    protected ?string $AuthenticationToken;
     /**
      * @Column(type="integer")
      */
-    protected ?int $authenticationTimeout;
+    protected ?int $AuthenticationTimeout;
     /**
      * @Column(type="text", nullable=true)
      */
-    protected ?string $accessToken;
+    protected ?string $AccessToken;
     /**
      * @Column(type="integer")
      */
-    protected ?int $accessTimeout;
+    protected ?int $AccessTimeout;
 
     public function getServiceTblAccount(): ?TblAccount
     {
@@ -53,44 +58,62 @@ class TblToken extends Element
         $this->serviceTblAccount = $tblAccount?->getId();
     }
 
+    /**
+     * @return string
+     */
+    public function getDeviceFactor(): string
+    {
+        return $this->DeviceFactor;
+    }
+
+    /**
+     * @param string $deviceFactor
+     *
+     * @return void
+     */
+    public function setDeviceFactor(string $deviceFactor): void
+    {
+        $this->DeviceFactor = $deviceFactor;
+    }
+
     public function getAuthenticationToken(): ?string
     {
-        return $this->authenticationToken;
+        return $this->AuthenticationToken;
     }
 
     public function setAuthenticationToken(?string $authenticationToken): void
     {
-        $this->authenticationToken = $authenticationToken;
+        $this->AuthenticationToken = $authenticationToken;
     }
 
     public function getAuthenticationTimeout(): ?int
     {
-        return $this->authenticationTimeout;
+        return $this->AuthenticationTimeout;
     }
 
     public function setAuthenticationTimeout(?int $authenticationTimeout): void
     {
-        $this->authenticationTimeout = $authenticationTimeout;
+        $this->AuthenticationTimeout = $authenticationTimeout;
     }
 
 
     public function getAccessToken(): ?string
     {
-        return $this->accessToken;
+        return $this->AccessToken;
     }
 
     public function setAccessToken(?string $accessToken): void
     {
-        $this->accessToken = $accessToken;
+        $this->AccessToken = $accessToken;
     }
 
     public function getAccessTimeout(): ?int
     {
-        return $this->accessTimeout;
+        return $this->AccessTimeout;
     }
 
     public function setAccessTimeout(?int $accessTimeout): void
     {
-        $this->accessTimeout = $accessTimeout;
+        $this->AccessTimeout = $accessTimeout;
     }
 }

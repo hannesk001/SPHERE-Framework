@@ -3,7 +3,6 @@
 namespace SPHERE\Application\App\Test;
 
 use SPHERE\Application\App\ApplicationInterface;
-use SPHERE\Application\App\Authorization\Authorization;
 use SPHERE\Application\App\ModuleInterface;
 use SPHERE\Application\App\Response\Code\Response200;
 use SPHERE\Application\App\Response\ResponseInterface;
@@ -37,12 +36,6 @@ class Test implements ApplicationInterface, ModuleInterface
      */
     public static function handleRequest(): ResponseInterface
     {
-        $response = Authorization::checkAuthorization();
-        // authorization failed
-        if ($response instanceof ResponseInterface) {
-            return $response;
-        }
-
         $name = '';
         if (($tblPerson = Account::useService()->getPersonByLogin())) {
             $name = $tblPerson->getFullName();
