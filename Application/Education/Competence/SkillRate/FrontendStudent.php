@@ -66,7 +66,7 @@ use SPHERE\Common\Frontend\Text\Repository\Muted;
 use SPHERE\Common\Frontend\Text\Repository\Small;
 use SPHERE\Common\Window\Stage;
 
-class FrontendStudent extends FrontendDivisionCourse
+class FrontendStudent extends FrontendPrepareCertificate
 {
     /**
      * @param $DivisionCourseId
@@ -624,7 +624,7 @@ class FrontendStudent extends FrontendDivisionCourse
             $headerList['Option'] = $gradeFrontend->getTableColumnHead('&nbsp;');
         }
 
-        $tblStudentSkillRateList = SkillRate::useService()->getStudentSkillRateListBy($tblStudentSkill, $tblSubjectForSkillRate);
+        $tblStudentSkillRateList = SkillRate::useService()->getStudentSkillRateListForRateBy($tblStudentSkill, $tblSubjectForSkillRate);
         $bodyList = [];
         foreach ($tblStudentSkillRateList as $tblStudentSkillRate) {
             $bodyList[$tblStudentSkillRate->getId()]['Date'] = $gradeFrontend->getTableColumnBody($tblStudentSkillRate->getDateString());

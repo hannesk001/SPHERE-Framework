@@ -8,7 +8,9 @@ use SPHERE\Application\Education\Competence\ScoreType\Service\Entity\TblScoreTyp
 use SPHERE\Application\Education\Competence\SkillGrid\Service\Entity\TblSkill;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkill;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRate;
+use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRateType;
 use SPHERE\Application\Education\Lesson\Subject\Service\Entity\TblSubject;
+use SPHERE\Application\Education\Lesson\Subject\Subject;
 use SPHERE\Application\Education\Lesson\Term\Service\Entity\TblYear;
 use SPHERE\Application\People\Person\Service\Entity\TblPerson;
 use SPHERE\Application\Platform\System\Protocol\Protocol;
@@ -22,7 +24,13 @@ class Data extends AbstractData
      */
     public function setupDatabaseContent(): void
     {
+        $this->createStudentSkillRateType('Fach Kompetenz-Bewertung', TblStudentSkillRateType::IDENTIFIER_SUBJECT_RATE);
+        $this->createStudentSkillRateType('Fach Zeugnis-Bewertung', TblStudentSkillRateType::IDENTIFIER_SUBJECT_CERTIFICATE);
+        $this->createStudentSkillRateType('Fächerübergreifende Kompetenz-Bewertung durch Fachlehrer', TblStudentSkillRateType::IDENTIFIER_INTERDISCIPLINARY_RATE);
+        $this->createStudentSkillRateType('Fächerübergreifende Zeugnis-Bewertung durch Klassenlehrer', TblStudentSkillRateType::IDENTIFIER_INTERDISCIPLINARY_CERTIFICATE);
 
+        // TODO Remove after DB-Update auf LIVE-Servern
+        $this->migrateStudentSkillRateType();
     }
 
     /**
@@ -173,15 +181,18 @@ class Data extends AbstractData
 
     /**
      * @param TblStudentSkill $tblStudentSkill
+     * @param TblStudentSkillRateType $tblStudentSkillRateType
      * @param TblSubject|null $tblSubjectForSkillRate
      *
      * @return TblStudentSkillRate[]
      */
-    public function getStudentSkillRateListBy(TblStudentSkill $tblStudentSkill, ?TblSubject $tblSubjectForSkillRate): array
-    {
+    public function getStudentSkillRateListBy(
+        TblStudentSkill $tblStudentSkill, TblStudentSkillRateType $tblStudentSkillRateType, ?TblSubject $tblSubjectForSkillRate
+    ): array {
         return $this->getCachedEntityListBy(__METHOD__, $this->getEntityManager(), 'TblStudentSkillRate',
             [
                 TblStudentSkillRate::TBL_STUDENT_SKILL => $tblStudentSkill->getId(),
+                TblStudentSkillRate::TBL_STUDENT_SKILL_RATE_TYPE => $tblStudentSkillRateType,
                 TblStudentSkillRate::SERVICE_TBL_SUBJECT => $tblSubjectForSkillRate?->getId()
             ],
             [TblStudentSkillRate::ATTR_DATE => self::ORDER_ASC]) ?: [];
@@ -190,19 +201,44 @@ class Data extends AbstractData
     /**
      * @param TblStudentSkill $tblStudentSkill
      *
-     * @return TblStudentSkillRate[]
+     * @return TblSubject[]
      */
-    public function getStudentSkillRateListByStudentSkill(TblStudentSkill $tblStudentSkill): array
+    public function getSubjectListForStudentSkillRateInterdisciplinary(TblStudentSkill $tblStudentSkill): array
     {
-        return $this->getCachedEntityListBy(__METHOD__, $this->getEntityManager(), 'TblStudentSkillRate',
-            [
-                TblStudentSkillRate::TBL_STUDENT_SKILL => $tblStudentSkill->getId(),
-            ],
-            [TblStudentSkillRate::ATTR_DATE => self::ORDER_ASC]) ?: [];
+        $Manager = $this->getEntityManager();
+        $queryBuilder = $Manager->getQueryBuilder();
+
+        $query = $queryBuilder->select('t.serviceTblSubject')
+            ->from(TblStudentSkillRate::class, 't')
+            ->where(
+                $queryBuilder->expr()->andX(
+                    $queryBuilder->expr()->eq('t.tblCompetenceStudentSkill', '?1'),
+                    $queryBuilder->expr()->eq('t.tblCompetenceStudentSkillRateType', '?2'),
+                )
+            )
+            ->setParameter(1, $tblStudentSkill->getId())
+            ->setParameter(2, $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_INTERDISCIPLINARY_RATE))
+            ->distinct()
+            ->groupBy('t.serviceTblSubject')
+            ->getQuery();
+
+        $resultList = $query->getResult();
+
+        $tblSubjectList = [];
+        if (is_array($resultList)) {
+            foreach ($resultList as $item) {
+                if (($tblSubject = Subject::useService()->getSubjectById($item['serviceTblSubject']))) {
+                    $tblSubjectList[] = $tblSubject;
+                }
+            }
+        }
+
+        return $tblSubjectList;
     }
 
     /**
      * @param TblStudentSkill $tblStudentSkill
+     * @param TblStudentSkillRateType $tblStudentSkillRateType
      * @param TblPerson|null $tblPersonTeacher
      * @param DateTime $dateTime
      * @param string|null $comment
@@ -212,13 +248,14 @@ class Data extends AbstractData
      *
      * @return TblStudentSkillRate
      */
-    public function createStudentSkillRate(TblStudentSkill $tblStudentSkill,
+    public function createStudentSkillRate(TblStudentSkill $tblStudentSkill, TblStudentSkillRateType $tblStudentSkillRateType,
         ?TblPerson $tblPersonTeacher, DateTime $dateTime, ?string $comment, string $rate, ?TblScoreTypeItem $tblScoreTypeItem, ?TblSubject $tblSubject = null)
     : TblStudentSkillRate {
         $manager = $this->getEntityManager();
 
         $entity = new TblStudentSkillRate();
         $entity->setTblStudentSkill($tblStudentSkill);
+        $entity->setTblStudentSkillRateType($tblStudentSkillRateType);
         $entity->setDate($dateTime);
         $entity->setComment($comment);
         $entity->setRate($rate);
@@ -304,5 +341,88 @@ class Data extends AbstractData
         Protocol::useService()->flushBulkEntries();
 
         return true;
+    }
+
+    /**
+     * @param $id
+     *
+     * @return TblStudentSkillRateType|false
+     */
+    public function getStudentSkillRateTypeById($id): false|TblStudentSkillRateType
+    {
+        return $this->getCachedEntityById(__METHOD__, $this->getEntityManager(), 'TblStudentSkillRateType', $id);
+    }
+
+    /**
+     * @param $identifier
+     *
+     * @return TblStudentSkillRateType|false
+     */
+    public function getStudentSkillRateTypeByIdentifier($identifier): false|TblStudentSkillRateType
+    {
+        return $this->getCachedEntityBy(__METHOD__, $this->getEntityManager(), 'TblStudentSkillRateType',
+            [TblStudentSkillRateType::ATTR_IDENTIFIER => $identifier]);
+    }
+
+    /**
+     * @param string $name
+     * @param string $identifier
+     *
+     * @return TblStudentSkillRateType
+     */
+    public function createStudentSkillRateType(string $name, string $identifier): TblStudentSkillRateType
+    {
+        $Manager = $this->getEntityManager();
+        $identifier = strtoupper($identifier);
+        $Entity = $Manager->getEntity('TblStudentSkillRateType')->findOneBy(array(TblStudentSkillRateType::ATTR_IDENTIFIER => $identifier));
+        if (null === $Entity) {
+            $Entity = new TblStudentSkillRateType();
+            $Entity->setName($name);
+            $Entity->setIdentifier($identifier);
+
+            $Manager->saveEntity($Entity);
+            Protocol::useService()->createInsertEntry($this->getConnection()->getDatabase(), $Entity);
+        }
+
+        return $Entity;
+    }
+
+    /**
+     * @return void
+     */
+    public function migrateStudentSkillRateType(): void
+    {
+        $Manager = $this->getConnection()->getEntityManager();
+        $tblStudentSkillRateTypeSubject = $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_SUBJECT_RATE);
+        $tblStudentSkillRateTypeInterdisciplinary = $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_INTERDISCIPLINARY_RATE);
+
+        if ($tblStudentSkillRateTypeSubject
+            && $tblStudentSkillRateTypeInterdisciplinary
+            && ($list = $this->getCachedEntityListBy(__METHOD__, $this->getEntityManager(), 'TblStudentSkillRate',
+                [TblStudentSkillRate::TBL_STUDENT_SKILL_RATE_TYPE => null]))
+        ) {
+            /** @var TblStudentSkillRate $tblStudentSkillRate */
+            foreach ($list as $tblStudentSkillRate) {
+                if ($tblStudentSkillRate->getServiceTblSubject()) {
+                    $tblStudentSkillRateType = $tblStudentSkillRateTypeInterdisciplinary;
+                } else {
+                    $tblStudentSkillRateType = $tblStudentSkillRateTypeSubject;
+                }
+
+                // Update
+                /** @var TblStudentSkillRate $Entity */
+                $Entity = $Manager->getEntityById('TblStudentSkillRate', $tblStudentSkillRate->getId());
+                $Protocol = clone $Entity;
+                if (null !== $Entity) {
+                    $Entity->setTblStudentSkillRateType($tblStudentSkillRateType);
+
+                    $Manager->bulkSaveEntity($Entity);
+                    Protocol::useService()->createUpdateEntry($this->getConnection()->getDatabase(), $Protocol, $Entity, true);
+                }
+            }
+
+            $Manager->flushCache();
+            Protocol::useService()->flushBulkEntries();
+        }
     }
 }

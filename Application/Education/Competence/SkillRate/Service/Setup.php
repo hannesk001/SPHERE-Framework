@@ -22,7 +22,8 @@ class Setup extends AbstractSetup
          */
         $schema = clone $this->getConnection()->getSchema();
         $tblStudentSkill = $this->setTableStudentSkill($schema);
-        $this->setTableStudentSkillRate($schema, $tblStudentSkill);
+        $tblStudentSkillRateType = $this->setTableStudentSkillRateType($schema);
+        $this->setTableStudentSkillRate($schema, $tblStudentSkill, $tblStudentSkillRateType);
 
         /**
          * Migration & Protocol
@@ -66,21 +67,43 @@ class Setup extends AbstractSetup
     /**
      * @param Schema $schema
      * @param Table $tblStudentSkill
+     * @param Table $tblStudentSkillRateType
      *
      * @return void
      */
-    private function setTableStudentSkillRate(Schema $schema, Table $tblStudentSkill): void
+    private function setTableStudentSkillRate(Schema $schema, Table $tblStudentSkill, Table $tblStudentSkillRateType): void
     {
         $table = $this->createTable($schema, 'tblCompetenceStudentSkillRate');
 //        $this->createColumn($table, 'serviceTblPerson', self::FIELD_TYPE_BIGINT);
 //        $this->createColumn($table, 'serviceTblYear', self::FIELD_TYPE_BIGINT);
 //        $this->createColumn($table, 'serviceTblSubject', self::FIELD_TYPE_BIGINT, true);
         $this->createForeignKey($table, $tblStudentSkill);
+        $this->createForeignKey($table, $tblStudentSkillRateType, true);
+
         $this->createColumn($table, 'Date', self::FIELD_TYPE_DATETIME);
         $this->createColumn($table, 'Comment', self::FIELD_TYPE_STRING, true);
         $this->createColumn($table, 'Rate', self::FIELD_TYPE_STRING, true);
         $this->createColumn($table, 'serviceTblScoreTypeItem', self::FIELD_TYPE_BIGINT, true);
         $this->createColumn($table, 'serviceTblPersonTeacher', self::FIELD_TYPE_BIGINT, true);
         $this->createColumn($table, 'serviceTblSubject', self::FIELD_TYPE_BIGINT, true);
+
+        // todo indexe
+    }
+
+    /**
+     * @param Schema $schema
+     *
+     * @return Table
+     */
+    private function setTableStudentSkillRateType(Schema $schema): Table
+    {
+        $table = $this->createTable($schema, 'tblCompetenceStudentSkillRateType');
+
+        $this->createColumn($table, 'Name');
+        $this->createColumn($table, 'Identifier');
+
+        $this->createIndex($table, array('Identifier'));
+
+        return $table;
     }
 }

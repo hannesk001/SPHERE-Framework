@@ -11,6 +11,7 @@ use SPHERE\Application\Education\Absence\Service\Entity\TblAbsence;
 use SPHERE\Application\Education\Certificate\Prepare\Service\Entity\TblPrepareCertificate;
 use SPHERE\Application\Education\Certificate\Prepare\Service\Entity\TblPrepareStudent;
 use SPHERE\Application\Education\ClassRegister\Digital\Digital;
+use SPHERE\Application\Education\Competence\SkillRate\SkillRate;
 use SPHERE\Application\Education\Graduation\Grade\Grade;
 use SPHERE\Application\Education\Graduation\Grade\Service\Entity\TblGradeType;
 use SPHERE\Application\Education\Graduation\Grade\Service\Entity\TblTaskGrade;
@@ -91,8 +92,15 @@ abstract class FrontendSetting extends FrontendSelect
             $useClassRegisterForAbsence = ($tblSetting = ConsumerSetting::useService()->getSetting('Education', 'ClassRegister', 'Absence', 'UseClassRegisterForAbsence'))
                 && $tblSetting->getValue();
 
-            // Kopfnoten festlegen
+            // Einstieg bei Kompetenzauftrag → Festlegung fächerübergreifende Kompetenzen
             if (!$IsNotGradeType
+                && ($tblCertificateType = $tblPrepare->getCertificateType())
+                && str_contains($tblCertificateType->getIdentifier(), 'SKILL_')
+            ) {
+                return $this->getCompetenceStage($tblPrepare, $tblDivisionCourse, $Route, $useClassRegisterForAbsence);
+            }
+            // Kopfnoten festlegen
+            elseif (!$IsNotGradeType
                 && (($useMultipleBehaviorTasks && ($tblTaskList = Grade::useService()->getBehaviorTaskListByDivisionCourse($tblDivisionCourse)))
                     || $tblPrepare->getServiceTblBehaviorTask()
                 )
@@ -111,6 +119,57 @@ abstract class FrontendSetting extends FrontendSelect
 
         return (new Stage('Zeugnisvorbereitung'))
             . new Danger('Die Zeugnisvorbereitung wurde nicht gefunden', new Exclamation());
+    }
+
+    private function getCompetenceStage(TblPrepareCertificate $tblPrepare, TblDivisionCourse $tblDivisionCourse, string $Route, bool $useClassRegisterForAbsence): Stage
+    {
+        $stage = new Stage('Zeugnisvorbereitung', 'Fächerübergreifende Kompetenzen festlegen');
+        $stage->addButton(new Standard('Zurück', '/Education/Certificate/Prepare/Prepare', new ChevronLeft(),
+            array(
+                'DivisionId' => $tblDivisionCourse->getId(),
+                'Route' => $Route
+            )
+        ));
+
+        $buttonList = $this->getInformationButtonList($tblPrepare, $Route, $useClassRegisterForAbsence, [], -1,
+            $nextPage, $informationPageList, $CertificateHasAbsenceList, $StudentHasAbsenceLessonsList, true);
+
+        $stage->setContent(
+            ApiReloadReceiver::receiverReload(ApiReloadReceiver::pipelineReload())
+            .new Layout(array(
+                new LayoutGroup(array(
+                    new LayoutRow(array(
+                        new LayoutColumn(array(
+                            new Panel(
+                                'Zeugnis',
+                                array(
+                                    $tblPrepare->getName() . ' ' . new Small(new Muted($tblPrepare->getDate()))
+                                ),
+                                Panel::PANEL_TYPE_INFO
+                            ),
+                        ), 6),
+                        new LayoutColumn(array(
+                            new Panel(
+                                $tblDivisionCourse->getTypeName(),
+                                $tblDivisionCourse->getDisplayName(),
+                                Panel::PANEL_TYPE_INFO
+                            ),
+                        ), 6),
+                    )),
+                    new LayoutRow(array(
+                        new LayoutColumn($buttonList),
+                    )),
+                    new LayoutRow(array(
+                        new LayoutColumn(new Container('&nbsp;')),
+                    )),
+                    new LayoutRow(array(
+                        new LayoutColumn(SkillRate::useFrontend()->loadPrepareCompetenceContent($tblDivisionCourse, $tblPrepare)),
+                    ))
+                ))
+            ))
+        );
+
+        return $stage;
     }
 
     private function getBehaviorGradesStage(TblPrepareCertificate $tblPrepare, TblDivisionCourse $tblDivisionCourse, string $Route, $useClassRegisterForAbsence, $Data,
@@ -625,7 +684,7 @@ abstract class FrontendSetting extends FrontendSelect
             $tblGradeTypeList = Grade::useService()->getGradeTypeListByTask($tblTask);
         }
         $buttonList = $this->getInformationButtonList($tblPrepare, $Route, $useClassRegisterForAbsence, $tblGradeTypeList ?: array(), $Page, $nextPage,
-            $informationPageList, $CertificateHasAbsenceList, $StudentHasAbsenceLessonsList);
+            $informationPageList, $CertificateHasAbsenceList, $StudentHasAbsenceLessonsList, false);
 
         if ($Page == 'Absence') {
             $this->getAbsenceContent($tblPrepare, $Route, $CertificateList, $useClassRegisterForAbsence, $Stage, $Data, $buttonList, $nextPage,
@@ -1122,19 +1181,42 @@ abstract class FrontendSetting extends FrontendSelect
     }
 
     private function getInformationButtonList(TblPrepareCertificate $tblPrepare, string $Route, bool $useClassRegisterForAbsence, array $tblGradeTypeList,
-        $Page, &$nextPage, &$informationPageList, &$CertificateHasAbsenceList, &$StudentHasAbsenceLessonsList): array
+        $Page, &$nextPage, &$informationPageList, &$CertificateHasAbsenceList, &$StudentHasAbsenceLessonsList, bool $isCompetenceSelected): array
     {
-        // Tabs für Zensuren-Typen
+        $isCompetence = ($tblCertificateType = $tblPrepare->getCertificateType())
+            && str_contains($tblCertificateType->getIdentifier(), 'SKILL_');
+
         $buttonList = array();
-        /** @var TblGradeType $tblGradeType */
-        foreach ($tblGradeTypeList as $tblGradeType) {
-            $buttonList[] = new Standard($tblGradeType->getName(),
-                '/Education/Certificate/Prepare/Prepare/Setting', null, array(
-                    'PrepareId' => $tblPrepare->getId(),
-                    'Route' => $Route,
-                    'GradeTypeId' => $tblGradeType->getId()
-                )
-            );
+        if ($isCompetence) {
+            if ($isCompetenceSelected) {
+                $buttonList[] = new Standard(new Info(new Bold('Fächerübergreifende Kompetenzen')),
+                    '/Education/Certificate/Prepare/Prepare/Setting', new Edit(), array(
+                        'PrepareId' => $tblPrepare->getId(),
+                        'Route' => $Route,
+                        'IsNotGradeType' => false
+                    )
+                );
+            } else {
+                $buttonList[] = new Standard('Fächerübergreifende Kompetenzen',
+                    '/Education/Certificate/Prepare/Prepare/Setting', null, array(
+                        'PrepareId' => $tblPrepare->getId(),
+                        'Route' => $Route,
+                        'IsNotGradeType' => false
+                    )
+                );
+            }
+        } else {
+            // Tabs für Zensuren-Typen (Kopfnoten)
+            /** @var TblGradeType $tblGradeType */
+            foreach ($tblGradeTypeList as $tblGradeType) {
+                $buttonList[] = new Standard($tblGradeType->getName(),
+                    '/Education/Certificate/Prepare/Prepare/Setting', null, array(
+                        'PrepareId' => $tblPrepare->getId(),
+                        'Route' => $Route,
+                        'GradeTypeId' => $tblGradeType->getId()
+                    )
+                );
+            }
         }
 
         // Erstellt zusätzliche "Tabs" für weitere Sonstige Informationen und die Fehlzeiten

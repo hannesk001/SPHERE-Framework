@@ -26,6 +26,7 @@ use SPHERE\System\Database\Fitting\Element;
 class TblStudentSkillRate extends Element
 {
     const string TBL_STUDENT_SKILL = 'tblCompetenceStudentSkill';
+    const string TBL_STUDENT_SKILL_RATE_TYPE = 'tblCompetenceStudentSkillRateType';
     const string ATTR_DATE = 'Date';
     const string SERVICE_TBL_SUBJECT = 'serviceTblSubject';
 
@@ -33,6 +34,12 @@ class TblStudentSkillRate extends Element
      * @Column(type="bigint")
      */
     protected int $tblCompetenceStudentSkill;
+
+    /**
+     * @Column(type="bigint")
+     */
+    protected int $tblCompetenceStudentSkillRateType;
+
     /**
      * @Column(type="datetime")
      */
@@ -75,6 +82,24 @@ class TblStudentSkillRate extends Element
     public function setTblStudentSkill(TblStudentSkill $tblStudentSkill): void
     {
         $this->tblCompetenceStudentSkill = $tblStudentSkill->getId();
+    }
+
+    /**
+     * @return false|TblStudentSkillRateType|null
+     */
+    public function getTblStudentSkillRateType(): false|TblStudentSkillRateType|null
+    {
+        return $this->tblCompetenceStudentSkillRateType ? SkillRate::useService()->getStudentSkillRateTypeById($this->tblCompetenceStudentSkillRateType) : null;
+    }
+
+    /**
+     * @param TblStudentSkillRateType $tblStudentSkillRateType
+     *
+     * @return void
+     */
+    public function setTblStudentSkillRateType(TblStudentSkillRateType $tblStudentSkillRateType): void
+    {
+        $this->tblCompetenceStudentSkillRateType = $tblStudentSkillRateType->getId();
     }
 
     /**

@@ -11,6 +11,7 @@ use SPHERE\Application\Education\Competence\SkillGrid\SkillGrid;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Data;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkill;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRate;
+use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRateType;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Setup;
 use SPHERE\Application\Education\Lesson\DivisionCourse\DivisionCourse;
 use SPHERE\Application\Education\Lesson\DivisionCourse\Service\Entity\TblDivisionCourse;
@@ -162,13 +163,56 @@ class Service extends AbstractService
 
     /**
      * @param TblStudentSkill $tblStudentSkill
+     * @param TblStudentSkillRateType $tblStudentSkillRateType
      * @param TblSubject|null $tblSubjectForSkillRate
      *
      * @return TblStudentSkillRate[]
      */
-    public function getStudentSkillRateListBy(TblStudentSkill $tblStudentSkill, ?TblSubject $tblSubjectForSkillRate = null): array
+    public function getStudentSkillRateListBy(TblStudentSkill $tblStudentSkill, TblStudentSkillRateType $tblStudentSkillRateType, ?TblSubject $tblSubjectForSkillRate = null): array
     {
-        return (new Data($this->getBinding()))->getStudentSkillRateListBy($tblStudentSkill, $tblSubjectForSkillRate);
+        return (new Data($this->getBinding()))->getStudentSkillRateListBy($tblStudentSkill, $tblStudentSkillRateType, $tblSubjectForSkillRate);
+    }
+
+    /**
+     * @param TblStudentSkill $tblStudentSkill
+     * @param TblSubject|null $tblSubjectForSkillRate
+     *
+     * @return array|TblStudentSkillRate[]
+     */
+    public function getStudentSkillRateListForRateBy(TblStudentSkill $tblStudentSkill, ?TblSubject $tblSubjectForSkillRate): array
+    {
+        if ($tblStudentSkill->getServiceTblSubject()) {
+            $tblStudentSkillRateType = $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_SUBJECT_RATE);
+        } else {
+            $tblStudentSkillRateType = $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_INTERDISCIPLINARY_RATE);
+        }
+
+        if ($tblStudentSkillRateType) {
+            return $this->getStudentSkillRateListBy($tblStudentSkill, $tblStudentSkillRateType, $tblSubjectForSkillRate);
+        }
+
+        return [];
+    }
+
+    /**
+     * @param TblStudentSkill $tblStudentSkill
+     * @param TblSubject|null $tblSubjectForSkillRate
+     *
+     * @return array|TblStudentSkillRate[]
+     */
+    public function getStudentSkillRateListForCertificateBy(TblStudentSkill $tblStudentSkill, ?TblSubject $tblSubjectForSkillRate): array
+    {
+        if ($tblStudentSkill->getServiceTblSubject()) {
+            $tblStudentSkillRateType = $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_SUBJECT_CERTIFICATE);
+        } else {
+            $tblStudentSkillRateType = $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_INTERDISCIPLINARY_CERTIFICATE);
+        }
+
+        if ($tblStudentSkillRateType) {
+            return $this->getStudentSkillRateListBy($tblStudentSkill, $tblStudentSkillRateType, $tblSubjectForSkillRate);
+        }
+
+        return [];
     }
 
     /**
@@ -179,7 +223,7 @@ class Service extends AbstractService
      */
     public function getLastStudentSkillRateBy(TblStudentSkill $tblStudentSkill, ?TblSubject $tblSubjectForSkillRate): ?TblStudentSkillRate
     {
-        if (($list = $this->getStudentSkillRateListBy($tblStudentSkill, $tblSubjectForSkillRate))) {
+        if (($list = $this->getStudentSkillRateListForRateBy($tblStudentSkill, $tblSubjectForSkillRate))) {
             return $list[array_key_last($list)];
         }
 
@@ -262,19 +306,12 @@ class Service extends AbstractService
      */
     public function getStudentSkillRateLastOrAverageValueForInterdisciplinaryOverAllSubjects(TblStudentSkill $tblStudentSkill): array
     {
-        $tblSubjetList = [];
         $sum = floatval(0);
         $count = 0;
-        if (($tblStudentSkillRateList = (new Data($this->getBinding()))->getStudentSkillRateListByStudentSkill($tblStudentSkill))) {
-            foreach ($tblStudentSkillRateList as $tblStudentSkillRate) {
-
-                if (($tblSubject = $tblStudentSkillRate->getServiceTblSubject())
-                    && !isset($tblSubjetList[$tblSubject->getId()])
-                ) {
-                    $tblSubjetList[$tblSubject->getId()] = $tblSubject;
-                    $sum += $this->getStudentSkillRateLastOrAverageValue($tblStudentSkill, $tblSubject, null)['Value'];
-                    $count++;
-                }
+        if (($tblSubjectList = (new Data($this->getBinding()))->getSubjectListForStudentSkillRateInterdisciplinary($tblStudentSkill))) {
+            foreach ($tblSubjectList as $tblSubject) {
+                $sum += $this->getStudentSkillRateLastOrAverageValue($tblStudentSkill, $tblSubject, null)['Value'];
+                $count++;
             }
         }
 
@@ -294,13 +331,33 @@ class Service extends AbstractService
 
     /**
      * @param TblStudentSkill $tblStudentSkill
+     *
+     * @return array
+     */
+    public function getStudentSkillRateListForInterdisciplinary(TblStudentSkill $tblStudentSkill): array
+    {
+        $resultList = [];
+        if (($tblSubjectList = (new Data($this->getBinding()))->getSubjectListForStudentSkillRateInterdisciplinary($tblStudentSkill))) {
+            $tblSubjectList = $this->getSorter($tblSubjectList)->sortObjectBy('Acronym');
+            /** @var TblSubject $tblSubject */
+            foreach ($tblSubjectList as $tblSubject) {
+                $resultList[$tblSubject->getId()] = $tblSubject->getAcronym() . ': '
+                    . ($this->getStudentSkillRateLastOrAverageValue($tblStudentSkill, $tblSubject))['Display'];
+            }
+        }
+
+        return  $resultList;
+    }
+
+    /**
+     * @param TblStudentSkill $tblStudentSkill
      * @param TblSubject|null $tblSubjectForSkillRate
      *
      * @return float|null
      */
     public function getCalcAverageStudentSkillRate(TblStudentSkill $tblStudentSkill, ?TblSubject $tblSubjectForSkillRate): ?float
     {
-        if (($list = $this->getStudentSkillRateListBy($tblStudentSkill, $tblSubjectForSkillRate))) {
+        if (($list = $this->getStudentSkillRateListForRateBy($tblStudentSkill, $tblSubjectForSkillRate))) {
             $sum = array_sum(array_map(fn($item) => $item->getRateFloatValue(), $list));
             return round($sum / count($list), 2);
         }
@@ -339,7 +396,11 @@ class Service extends AbstractService
                 if ($value !== '') {
                     $value = trim(str_replace('%', '', $value));
                     if (($tblStudentSkill = $this->getStudentSkillByFrontendKey($key, $tblPerson, $tblYear, $tblSubject, $tblPersonTeacher))) {
-                        (new Data($this->getBinding()))->createStudentSkillRate($tblStudentSkill, $tblPersonTeacher,
+                        $tblStudentSkillRateType = $tblStudentSkill->getServiceTblSubject()
+                            ? $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_SUBJECT_RATE)
+                            : $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_INTERDISCIPLINARY_RATE);
+
+                        (new Data($this->getBinding()))->createStudentSkillRate($tblStudentSkill, $tblStudentSkillRateType, $tblPersonTeacher,
                             $datetime, $comment, $value, null, $tblSubjectForSkillRate);
                     }
                 }
@@ -354,7 +415,11 @@ class Service extends AbstractService
                             && ($tblScoreTypeItem = ScoreType::useService()->getScoreTypeItemById($scoreTypeItemId))
                         ) {
                             if (($tblStudentSkill = $this->getStudentSkillByFrontendKey($key, $tblPerson, $tblYear, $tblSubject, $tblPersonTeacher))) {
-                                (new Data($this->getBinding()))->createStudentSkillRate($tblStudentSkill, $tblPersonTeacher,
+                                $tblStudentSkillRateType = $tblStudentSkill->getServiceTblSubject()
+                                    ? $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_SUBJECT_RATE)
+                                    : $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_INTERDISCIPLINARY_RATE);
+
+                                (new Data($this->getBinding()))->createStudentSkillRate($tblStudentSkill, $tblStudentSkillRateType, $tblPersonTeacher,
                                     $datetime, $comment, $tblScoreTypeItem->getValue(), $tblScoreTypeItem, $tblSubjectForSkillRate);
                             }
                         }
@@ -678,6 +743,26 @@ class Service extends AbstractService
         return new Success('Kompetenz wurde erfolgreich hinzugefügt.')
             . ApiSkillRate::pipelineClose()
             . ApiSkillRate::pipelineLoadViewStudentContent($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId);
+    }
+
+    /**
+     * @param $id
+     *
+     * @return TblStudentSkillRateType|false
+     */
+    public function getStudentSkillRateTypeById($id): false|TblStudentSkillRateType
+    {
+        return (new Data($this->getBinding()))->getStudentSkillRateTypeById($id);
+    }
+
+    /**
+     * @param $identifier
+     *
+     * @return TblStudentSkillRateType|false
+     */
+    public function getStudentSkillRateTypeByIdentifier($identifier): false|TblStudentSkillRateType
+    {
+        return (new Data($this->getBinding()))->getStudentSkillRateTypeByIdentifier($identifier);
     }
 
     /**

@@ -261,7 +261,7 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
             foreach ($tblSkillList as $tblSkill) {
                 $countTotal++;
                 $tblStudentSkill = $tblStudentSkillList['SkillId_' . $tblSkill->getId()] ?? null;
-                if ($tblStudentSkill && SkillRate::useService()->getStudentSkillRateListBy($tblStudentSkill, $tblSubjectForSkillRate)) {
+                if ($tblStudentSkill && SkillRate::useService()->getStudentSkillRateListForRateBy($tblStudentSkill, $tblSubjectForSkillRate)) {
                     $countRates++;
                 }
 
@@ -271,7 +271,7 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
             foreach ($tblStudentSkillList as $tblStudentSkill) {
                 if (!$tblStudentSkill->getServiceTblSkill() || !isset($skills[$tblStudentSkill->getServiceTblSkill()->getId()])) {
                     $countTotal++;
-                    if (SkillRate::useService()->getStudentSkillRateListBy($tblStudentSkill)) {
+                    if (SkillRate::useService()->getStudentSkillRateListForRateBy($tblStudentSkill, $tblSubjectForSkillRate)) {
                         $countRates++;
                     }
                 }
@@ -283,7 +283,9 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
                 Förderschwerpunkt: {$tblSupportFocusType->getName()}.<br> 
                 Bitte wählen Sie für den Schüler die entsprechenden Kompetenzen bei der Kompetenzbewertung über: \"Kompetenzen auswählen\" aus.");
         } else {
-            return "$countRates von $countTotal Kompetenzen bewertet.";
+            return "$countRates von $countTotal "
+                . ($tblSubject ? "Fach-" : "fächerübergreifende ")
+                ."Kompetenzen bewertet.";
         }
     }
 
