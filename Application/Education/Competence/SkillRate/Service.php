@@ -5,6 +5,7 @@ namespace SPHERE\Application\Education\Competence\SkillRate;
 use DateTime;
 use NumberFormatter;
 use SPHERE\Application\Api\Education\Competence\ApiSkillRate;
+use SPHERE\Application\Education\Certificate\Prepare\Service\Entity\TblPrepareCertificate;
 use SPHERE\Application\Education\Competence\ScoreType\ScoreType;
 use SPHERE\Application\Education\Competence\SkillGrid\Service\Entity\TblSkill;
 use SPHERE\Application\Education\Competence\SkillGrid\SkillGrid;
@@ -194,13 +195,7 @@ class Service extends AbstractService
         return [];
     }
 
-    /**
-     * @param TblStudentSkill $tblStudentSkill
-     * @param TblSubject|null $tblSubjectForSkillRate
-     *
-     * @return array|TblStudentSkillRate[]
-     */
-    public function getStudentSkillRateListForCertificateBy(TblStudentSkill $tblStudentSkill, ?TblSubject $tblSubjectForSkillRate): array
+    public function getStudentSkillRateForCertificateBy(TblStudentSkill $tblStudentSkill, TblPrepareCertificate $tblPrepareCertificate): TblStudentSkillRate|false
     {
         if ($tblStudentSkill->getServiceTblSubject()) {
             $tblStudentSkillRateType = $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_SUBJECT_CERTIFICATE);
@@ -209,10 +204,10 @@ class Service extends AbstractService
         }
 
         if ($tblStudentSkillRateType) {
-            return $this->getStudentSkillRateListBy($tblStudentSkill, $tblStudentSkillRateType, $tblSubjectForSkillRate);
+            return (new Data($this->getBinding()))->getStudentSkillRateBy($tblStudentSkill, $tblStudentSkillRateType, $tblPrepareCertificate);
         }
 
-        return [];
+        return false;
     }
 
     /**
@@ -939,6 +934,150 @@ class Service extends AbstractService
         }
 
         return [$hasErrors, $ErrorList];
+    }
+
+    public function createDivisionCourseCertificateSkillRateList(
+        TblDivisionCourse $tblDivisionCourse, TblPrepareCertificate $tblPrepareCertificate, $Data
+    ): string {
+        list($hasErrors, $ErrorList) = $this->checkDivisionCourseCertificateInput($Data);
+
+        if ($hasErrors) {
+            return SkillRate::useFrontend()->loadEditPrepareInterdisciplinaryContent(
+                $tblDivisionCourse->getId(), $tblPrepareCertificate->getId(), $Data, $ErrorList);
+        }
+
+        $tblStudentSkillRateType = $this->getStudentSkillRateTypeByIdentifier(TblStudentSkillRateType::IDENTIFIER_INTERDISCIPLINARY_CERTIFICATE);
+        $tblPersonTeacher = Account::useService()->getPersonByLogin() ?: null;
+        $tblYear = $tblDivisionCourse->getServiceTblYear();
+        $datetime = new DateTime('now');
+        $comment = null;
+        $createTblStudentSkillRateBulkList = [];
+        // "Data[PercentSkills][{$tblPerson->getId()}][$inputKey]";
+        // todo muss auch update können
+        // todo getStudentSkillRateBy
+        if (isset($Data['PercentSkills'])) {
+            foreach ($Data['PercentSkills'] as $personId => $personArray) {
+                if (($tblPerson = Person::useService()->getPersonById($personId))) {
+                    foreach ($personArray as $key => $value) {
+                        if ($value !== '') {
+                            $value = trim(str_replace('%', '', $value));
+                            if (($tblStudentSkill = $this->getStudentSkillByFrontendKey(
+                                $key, $tblPerson, $tblYear, null, $tblPersonTeacher
+                            ))) {
+                                $tblStudentSkillRate = new TblStudentSkillRate();
+                                $tblStudentSkillRate->setTblStudentSkill($tblStudentSkill);
+                                $tblStudentSkillRate->setServiceTblPersonTeacher($tblPersonTeacher);
+                                $tblStudentSkillRate->setDate($datetime);
+                                $tblStudentSkillRate->setComment($comment);
+                                $tblStudentSkillRate->setRate($value);
+                                $tblStudentSkillRate->setTblStudentSkillRateType($tblStudentSkillRateType);
+                                $tblStudentSkillRate->setServiceTblPrepareCertificate($tblPrepareCertificate);
+
+                                $createTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // beim Speichern erstmal den Wert mit Speichern, falls das Bewertungssystem nachträglich noch angepasst wird
+        // "Data[ScoreTypeSkills][{$tblPerson->getId()}][$inputKey]"
+        if (isset($Data['ScoreTypeSkills'])) {
+            foreach ($Data['ScoreTypeSkills'] as $personId => $personArray) {
+                if (($tblPerson = Person::useService()->getPersonById($personId))) {
+                    foreach ($personArray as $key => $scoreTypeItemId) {
+                        if ($scoreTypeItemId > 0
+                            && ($tblScoreTypeItem = ScoreType::useService()->getScoreTypeItemById($scoreTypeItemId))
+                        ) {
+                            if (($tblStudentSkill = $this->getStudentSkillByFrontendKey(
+                                $key, $tblPerson, $tblYear, null, $tblPersonTeacher
+                            ))) {
+                                $tblStudentSkillRate = new TblStudentSkillRate();
+                                $tblStudentSkillRate->setTblStudentSkill($tblStudentSkill);
+                                $tblStudentSkillRate->setServiceTblPersonTeacher($tblPersonTeacher);
+                                $tblStudentSkillRate->setDate($datetime);
+                                $tblStudentSkillRate->setComment($comment);
+                                $tblStudentSkillRate->setRate($tblScoreTypeItem->getValue());
+                                $tblStudentSkillRate->setServiceTblScoreTypeItem($tblScoreTypeItem);
+                                $tblStudentSkillRate->setTblStudentSkillRateType($tblStudentSkillRateType);
+                                $tblStudentSkillRate->setServiceTblPrepareCertificate($tblPrepareCertificate);
+
+                                $createTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($createTblStudentSkillRateBulkList) {
+            (new Data($this->getBinding()))->createEntityListBulk($createTblStudentSkillRateBulkList);
+        }
+
+        return new Success('Die Daten wurde erfolgreich gespeichert.');
+    }
+
+    /**
+     * @param $Data
+     *
+     * @return array
+     */
+    public function checkDivisionCourseCertificateInput($Data): array
+    {
+        $hasErrors = false;
+        $ErrorList = [];
+        if (empty($Data['Id'])) {
+            $ErrorList['Data[Id]'] = [
+                'Name' => 'Data[Id]',
+                'Message' => 'Bitte wählen Sie eine Kompetenz aus.'
+            ];
+            $hasErrors = true;
+        }
+        // Prüfung bei Prozent
+        if (isset($Data['PercentSkills'])) {
+            foreach ($Data['PercentSkills'] as $personId => $personArray) {
+                foreach ($personArray as $key => $value) {
+                    if ($value !== '') {
+                        // Prozent prüfen
+                        $value = trim(str_replace('%', '', $value));
+                        if (!ctype_digit($value) || $value < 0 || $value > 100) {
+                            $name = "Data[PercentSkills][$personId][$key]";
+                            $ErrorList[$name] = [
+                                'Name' => $name,
+                                'Message' => 'Bitte geben eine Zahl zwischen 0 und 100 ein.'
+                            ];
+                            $hasErrors = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return [$hasErrors, $ErrorList];
+    }
+
+    public function getSkillListByDivisionCourse(TblDivisionCourse $tblDivisionCourse): array
+    {
+        $skillList = [];
+        if (($tblYear = $tblDivisionCourse->getServiceTblYear())
+            && ($tblPersonList = $tblDivisionCourse->getStudentsWithSubCourses())
+        ) {
+            $schoolTypeList = [];
+            foreach ($tblPersonList as $tblPerson) {
+                if (($tblStudentEducation = DivisionCourse::useService()->getStudentEducationByPersonAndYear($tblPerson, $tblYear))
+                    && ($tblSchoolType = $tblStudentEducation->getServiceTblSchoolType())
+                    && ($level = $tblStudentEducation->getLevel()) !== null
+                ) {
+                    if (!isset($schoolTypeList[$tblSchoolType->getId()][$level])) {
+                        $schoolTypeList[$tblSchoolType->getId()][$level] = 1;
+                        // Bildungsgang? Primärer Förderschwerpunkt?
+                        $skillList = array_merge($skillList, SkillGrid::useService()->getSkillListBy($tblSchoolType, $level));
+                    }
+                }
+            }
+        }
+
+        return $skillList;
     }
 
     /**

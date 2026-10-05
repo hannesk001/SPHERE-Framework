@@ -3,6 +3,7 @@
 namespace SPHERE\Application\Education\Competence\SkillRate\Service;
 
 use DateTime;
+use SPHERE\Application\Education\Certificate\Prepare\Service\Entity\TblPrepareCertificate;
 use SPHERE\Application\Education\Competence\ScoreType\Service\Entity\TblScoreType;
 use SPHERE\Application\Education\Competence\ScoreType\Service\Entity\TblScoreTypeItem;
 use SPHERE\Application\Education\Competence\SkillGrid\Service\Entity\TblSkill;
@@ -177,6 +178,16 @@ class Data extends AbstractData
     public function getStudentSkillRateById($id): false|TblStudentSkillRate
     {
         return $this->getCachedEntityById(__METHOD__, $this->getEntityManager(), 'TblStudentSkillRate', $id);
+    }
+
+    public function getStudentSkillRateBy(
+        TblStudentSkill $tblStudentSkill, TblStudentSkillRateType $tblStudentSkillRateType, ?TblPrepareCertificate $tblPrepareCertificate
+    ): false|TblStudentSkillRate {
+        return $this->getCachedEntityBy(__METHOD__, $this->getEntityManager(), 'TblStudentSkillRate', [
+            TblStudentSkillRate::TBL_STUDENT_SKILL => $tblStudentSkill->getId(),
+            TblStudentSkillRate::TBL_STUDENT_SKILL_RATE_TYPE => $tblStudentSkillRateType->getId(),
+            TblStudentSkillRate::SERVICE_TBL_PREPARE_CERTIFICATE => $tblPrepareCertificate?->getId()
+        ]);
     }
 
     /**

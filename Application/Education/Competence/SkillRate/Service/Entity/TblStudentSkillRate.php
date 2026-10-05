@@ -8,6 +8,8 @@ use Doctrine\ORM\Mapping\Column;
 use Doctrine\ORM\Mapping\Entity;
 use Doctrine\ORM\Mapping\Table;
 use NumberFormatter;
+use SPHERE\Application\Education\Certificate\Prepare\Prepare;
+use SPHERE\Application\Education\Certificate\Prepare\Service\Entity\TblPrepareCertificate;
 use SPHERE\Application\Education\Competence\ScoreType\ScoreType;
 use SPHERE\Application\Education\Competence\ScoreType\Service\Entity\TblScoreTypeItem;
 use SPHERE\Application\Education\Competence\SkillRate\SkillRate;
@@ -29,6 +31,7 @@ class TblStudentSkillRate extends Element
     const string TBL_STUDENT_SKILL_RATE_TYPE = 'tblCompetenceStudentSkillRateType';
     const string ATTR_DATE = 'Date';
     const string SERVICE_TBL_SUBJECT = 'serviceTblSubject';
+    const string SERVICE_TBL_PREPARE_CERTIFICATE= 'serviceTblPrepareCertificate';
 
     /**
      * @Column(type="bigint")
@@ -63,7 +66,12 @@ class TblStudentSkillRate extends Element
     /**
      * @Column(type="bigint")
      */
-    protected ?int $serviceTblSubject;
+    protected ?int $serviceTblSubject = null;
+
+    /**
+     * @Column(type="bigint")
+     */
+    protected ?int $serviceTblPrepareCertificate = null;
 
     /**
      * @return false|TblStudentSkill
@@ -223,11 +231,11 @@ class TblStudentSkillRate extends Element
     }
 
     /**
-     * @return false|TblSubject|null
+     * @return false|TblSubject
      */
-    public function getServiceTblSubject(): false|TblSubject|null
+    public function getServiceTblSubject(): false|TblSubject
     {
-        return $this->serviceTblSubject ? Subject::useService()->getSubjectById($this->serviceTblSubject) : null;
+        return $this->serviceTblSubject ? Subject::useService()->getSubjectById($this->serviceTblSubject) : false;
     }
 
     /**
@@ -236,6 +244,26 @@ class TblStudentSkillRate extends Element
     public function setServiceTblSubject(?TblSubject $tblSubject): void
     {
         $this->serviceTblSubject = $tblSubject?->getId();
+    }
+
+    /**
+     * @return false|TblPrepareCertificate
+     */
+    public function getServiceTblPrepareCertificate(): false|TblPrepareCertificate
+    {
+        return $this->serviceTblPrepareCertificate
+            ? Prepare::useService()->getPrepareById($this->serviceTblPrepareCertificate)
+            : false;
+    }
+
+    /**
+     * @param TblPrepareCertificate|null $tblPrepareCertificate
+     *
+     * @return void
+     */
+    public function setServiceTblPrepareCertificate(?TblPrepareCertificate $tblPrepareCertificate): void
+    {
+        $this->serviceTblPrepareCertificate = $tblPrepareCertificate?->getId();
     }
 
     /**

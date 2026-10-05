@@ -64,18 +64,20 @@ use SPHERE\Common\Window\Stage;
 abstract class FrontendSetting extends FrontendSelect
 {
     /**
-     * @param $PrepareId
+     * @param null $PrepareId
+     * @param null $NextSkillId
      * @param string $Route
-     * @param $GradeTypeId
-     * @param $IsNotGradeType
-     * @param $Data
-     * @param $CertificateList
-     * @param $Page
+     * @param null $GradeTypeId
+     * @param null $IsNotGradeType
+     * @param null $Data
+     * @param null $CertificateList
+     * @param null $Page
      *
      * @return Stage|string
      */
     public function frontendPrepareSetting(
         $PrepareId = null,
+        $NextSkillId = null,
         string $Route = 'Teacher',
         $GradeTypeId = null,
         $IsNotGradeType = null,
@@ -97,7 +99,7 @@ abstract class FrontendSetting extends FrontendSelect
                 && ($tblCertificateType = $tblPrepare->getCertificateType())
                 && str_contains($tblCertificateType->getIdentifier(), 'SKILL_')
             ) {
-                return $this->getCompetenceStage($tblPrepare, $tblDivisionCourse, $Route, $useClassRegisterForAbsence);
+                return $this->getCompetenceStage($tblPrepare, $tblDivisionCourse, $Route, $useClassRegisterForAbsence, $NextSkillId);
             }
             // Kopfnoten festlegen
             elseif (!$IsNotGradeType
@@ -121,7 +123,8 @@ abstract class FrontendSetting extends FrontendSelect
             . new Danger('Die Zeugnisvorbereitung wurde nicht gefunden', new Exclamation());
     }
 
-    private function getCompetenceStage(TblPrepareCertificate $tblPrepare, TblDivisionCourse $tblDivisionCourse, string $Route, bool $useClassRegisterForAbsence): Stage
+    private function getCompetenceStage(TblPrepareCertificate $tblPrepare, TblDivisionCourse $tblDivisionCourse, string $Route, bool $useClassRegisterForAbsence,
+        $NextSkillId): Stage
     {
         $stage = new Stage('Zeugnisvorbereitung', 'Fächerübergreifende Kompetenzen festlegen');
         $stage->addButton(new Standard('Zurück', '/Education/Certificate/Prepare/Prepare', new ChevronLeft(),
@@ -163,7 +166,7 @@ abstract class FrontendSetting extends FrontendSelect
                         new LayoutColumn(new Container('&nbsp;')),
                     )),
                     new LayoutRow(array(
-                        new LayoutColumn(SkillRate::useFrontend()->loadPrepareCompetenceContent($tblDivisionCourse, $tblPrepare)),
+                        new LayoutColumn(SkillRate::useFrontend()->loadPrepareCompetenceContent($tblDivisionCourse, $tblPrepare, $Route, $NextSkillId)),
                     ))
                 ))
             ))

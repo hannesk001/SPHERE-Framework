@@ -86,6 +86,7 @@ class Setup extends AbstractSetup
         $this->createColumn($table, 'serviceTblScoreTypeItem', self::FIELD_TYPE_BIGINT, true);
         $this->createColumn($table, 'serviceTblPersonTeacher', self::FIELD_TYPE_BIGINT, true);
         $this->createColumn($table, 'serviceTblSubject', self::FIELD_TYPE_BIGINT, true);
+        $this->createColumn($table, 'serviceTblPrepareCertificate', self::FIELD_TYPE_BIGINT, true);
 
         // todo indexe
     }
@@ -103,6 +104,8 @@ class Setup extends AbstractSetup
         $this->createColumn($table, 'Identifier');
 
         $this->createIndex($table, array('Identifier'));
+
+
 
         return $table;
     }
