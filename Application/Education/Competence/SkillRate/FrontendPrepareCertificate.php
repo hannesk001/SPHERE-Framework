@@ -119,7 +119,6 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
         $headerList = $gradeFrontend->getGradeBookPreHeaderList($hasPicture, $hasIntegration, $hasCourse);
         $headerList['SkillRates'] = $gradeFrontend->getTableColumnHead('Bewertungen in den einzelnen Fächern');
         $headerList['Average'] = $gradeFrontend->getTableColumnHead('&#216;');
-        // todo Durchschnitt anzeigen und entsprechend voreintragen
 
         $tblScoreType = null;
         $isDiverseScoreType = false;
@@ -142,6 +141,7 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
             $headerList['Diverse'] = $gradeFrontend->getTableColumnHead('Bewertung');
         }
 
+        $hasProposalGrades = false;
         $count = 0;
         $bodyList = [];
         if ($tblPersonList
@@ -158,14 +158,14 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
 
                     $tblStudentSkillRate = false;
                     $virtualStudentSkill = $studentSkillList[$tblPerson->getId()];
+                    $averageArray['Value'] = '';
                     if ($virtualStudentSkill instanceof TblStudentSkill) {
+                        $averageArray = SkillRate::useService()->getStudentSkillRateLastOrAverageValueForInterdisciplinaryOverAllSubjects($virtualStudentSkill);
                         $bodyList[$tblPerson->getId()]['SkillRates'] = $gradeFrontend->getTableColumnBody(
                             implode(', ', SkillRate::useService()->getStudentSkillRateListForInterdisciplinary($virtualStudentSkill))
                         );
 
-                        $bodyList[$tblPerson->getId()]['Average'] = $gradeFrontend->getTableColumnBody(
-                            SkillRate::useService()->getStudentSkillRateLastOrAverageValueForInterdisciplinaryOverAllSubjects($virtualStudentSkill)['Display']
-                        );
+                        $bodyList[$tblPerson->getId()]['Average'] = $gradeFrontend->getTableColumnBody($averageArray['Display']);
 
                         $tblStudentSkillRate = SkillRate::useService()->getStudentSkillRateForCertificateBy($virtualStudentSkill, $tblPrepareCertificate);
 
@@ -177,13 +177,34 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
                         $inputKey = 'SkillId_' . $virtualStudentSkill->getId();
                     }
 
-                    // todo post -> mit Warnung und Vorschlag oder gespeichert wert
+                    $isGradeProposal = false;
+                    // gespeicherte Bewertung
                     if ($tblStudentSkillRate) {
                         $global = $this->getGlobal();
                         if (($tblStudentSkillRateScoreTypeItem = $tblStudentSkillRate->getServiceTblScoreTypeItem())) {
                             $global->POST['Data']['ScoreTypeSkills'][$tblPerson->getId()][$inputKey] = $tblStudentSkillRateScoreTypeItem->getId();
                         } else {
                             $global->POST['Data']['PercentSkills'][$tblPerson->getId()][$inputKey] = $tblStudentSkillRate->getRate();
+
+                        }
+                        $global->savePost();
+                    // Bewertungsvorschlag eintragen
+                    } elseif ($averageArray['Value'] !== '') {
+                        $isGradeProposal = true;
+                        $hasProposalGrades = true;
+                        $global = $this->getGlobal();
+                        $proposalValue = round($averageArray['Value']);
+                        if (isset($studentSkillList[$tblPerson->getId()])
+                            && ($tblScoreTypeStudent = $studentSkillList[$tblPerson->getId()]->getServiceTblScoreType())
+                        ) {
+                            // findet ScoreTypeItem anhand des Zahlenwertes
+                            $tempList = array_filter($tblScoreTypeStudent->getScoreTypeItems(), fn($e) => $e->getValue() == $proposalValue);
+                            $temp = reset($tempList);
+                            if ($temp) {
+                                $global->POST['Data']['ScoreTypeSkills'][$tblPerson->getId()][$inputKey] = $temp->getId();
+                            }
+                        } else {
+                            $global->POST['Data']['PercentSkills'][$tblPerson->getId()][$inputKey] = $proposalValue;
                         }
                         $global->savePost();
                     }
@@ -204,11 +225,17 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
                         // Divers (Schülerabhängig)
                         $identifier = "Data[ScoreTypeSkills][{$tblPerson->getId()}][$inputKey]";
                         $input = new SelectBox($identifier, '', ['{{ Name }}' => $tblScoreTypeStudent->getScoreTypeItems()], null, true, null);
+                        if ($isGradeProposal) {
+                            $input->setPrefixValue('Vorschlag');
+                        }
                         $bodyList[$tblPerson->getId()]['Diverse'] = $gradeFrontend->getTableColumnBody($input);
                     } else {
                         // Prozent
                         $identifier = "Data[PercentSkills][{$tblPerson->getId()}][$inputKey]";
                         $input = new TextField($identifier);
+                        if ($isGradeProposal) {
+                            $input->setPrefixValue('Vorschlag');
+                        }
 
                         // Anzeige Fehlermeldung
                         if (isset($ErrorList[$identifier])) {
@@ -226,7 +253,8 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
                 ? $this->getNextId(SkillRate::useService()->getSkillListByDivisionCourse($tblDivisionCourse), $tblSkill->getId())
                 : null;
 
-            return $gradeFrontend->getTableCustom($headerList, $bodyList)
+            return ($hasProposalGrades ? new Warning('Es wurden noch nicht alle Bewertungsvorschläge gespeichert.', new Exclamation()) : '')
+                . $gradeFrontend->getTableCustom($headerList, $bodyList)
                 . ($ErrorList ? new Danger("Die Daten wurden nicht gespeichert. Bitte beachten Sie die Fehlermeldungen weiter oben.") : '')
                 . (new Primary('Speichern', ApiSkillCertificate::getEndpoint(), new Save()))
                     ->ajaxPipelineOnClick(ApiSkillCertificate::pipelineSaveEditDivisionCourseSkillRate(

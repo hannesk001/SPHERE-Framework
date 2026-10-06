@@ -355,6 +355,55 @@ class Data extends AbstractData
     }
 
     /**
+     * @param array $tblStudentSkillRateList
+     */
+    public function updateStudentSkillRateListBulk(array $tblStudentSkillRateList): void
+    {
+        $Manager = $this->getConnection()->getEntityManager();
+        /** @var TblStudentSkillRate $Entity */
+        foreach ($tblStudentSkillRateList as $tblStudentSkillRate) {
+            $Entity = $Manager->getEntityById('TblStudentSkillRate', $tblStudentSkillRate->getId());
+            $Protocol = clone $Entity;
+            if (null !== $Entity) {
+                $Entity->setRate($tblStudentSkillRate->getRate());
+                $Entity->setServiceTblScoreTypeItem($tblStudentSkillRate->getServiceTblScoreTypeItem() ?: null);
+                $Entity->setServiceTblPersonTeacher($tblStudentSkillRate->getServiceTblPersonTeacher());
+
+                $Manager->bulkSaveEntity($Entity);
+                Protocol::useService()->createUpdateEntry($this->getConnection()->getDatabase(), $Protocol, $Entity, true);
+            }
+        }
+
+        $Manager->flushCache();
+        Protocol::useService()->flushBulkEntries();
+    }
+
+    /**
+     * @param array $tblEntityList
+     *
+     * @return bool
+     */
+    public function deleteEntityListBulk(array $tblEntityList): bool
+    {
+        $Manager = $this->getConnection()->getEntityManager();
+
+        /** @var Element $tblElement */
+        foreach ($tblEntityList as $tblElement) {
+
+            /** @var Element $Entity */
+            $Entity = $Manager->getEntityById($tblElement->getEntityShortName(), $tblElement->getId());
+
+            Protocol::useService()->createDeleteEntry($this->getConnection()->getDatabase(), $Entity, true);
+            $Manager->bulkKillEntity($Entity);
+        }
+
+        $Manager->flushCache();
+        Protocol::useService()->flushBulkEntries();
+
+        return true;
+    }
+
+    /**
      * @param $id
      *
      * @return TblStudentSkillRateType|false

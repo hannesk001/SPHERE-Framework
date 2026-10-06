@@ -167,7 +167,8 @@ abstract class SkillStyle extends Certificate
 
         $skillAreaList = SkillRate::useService()->setStudentSkillsForDisplay(
             $tblStudentSkillList,
-            !$tblSubject
+            !$tblSubject,
+            $this->getTblPrepareCertificate() ?: null
         );
 
         $slice = $this->getSubjectSlice($tblSubject, false);

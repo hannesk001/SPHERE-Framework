@@ -296,11 +296,29 @@ class Service extends AbstractService
 
     /**
      * @param TblStudentSkill $tblStudentSkill
+     * @param TblPrepareCertificate|null $tblPrepareCertificate
      *
      * @return array
      */
-    public function getStudentSkillRateLastOrAverageValueForInterdisciplinaryOverAllSubjects(TblStudentSkill $tblStudentSkill): array
+    public function getStudentSkillRateLastOrAverageValueForInterdisciplinaryOverAllSubjects(
+        TblStudentSkill $tblStudentSkill, TblPrepareCertificate $tblPrepareCertificate = null): array
     {
+        $value = 0;
+        $display = '';
+
+        // für Zeugnis die Festlegung des Klassenlehrers anzeigen
+        if ($tblPrepareCertificate) {
+            if (($tblStudentSkillRate = $this->getStudentSkillRateForCertificateBy($tblStudentSkill, $tblPrepareCertificate))) {
+                $value = $tblStudentSkillRate->getRateFloatValue();
+                $display = $tblStudentSkillRate->getDisplayRate();
+            }
+
+            return [
+                'Display' => $display,
+                'Value' => $value
+            ];
+        }
+
         $sum = floatval(0);
         $count = 0;
         if (($tblSubjectList = (new Data($this->getBinding()))->getSubjectListForStudentSkillRateInterdisciplinary($tblStudentSkill))) {
@@ -313,9 +331,6 @@ class Service extends AbstractService
         if ($count > 0) {
             $value = round($sum / $count, 2);
             $display = '&#216; ' . $value . (!$tblStudentSkill->getServiceTblScoreType() ? '%' : '');
-        } else {
-            $value = 0;
-            $display = '';
         }
 
         return [
@@ -952,28 +967,40 @@ class Service extends AbstractService
         $datetime = new DateTime('now');
         $comment = null;
         $createTblStudentSkillRateBulkList = [];
+        $updateTblStudentSkillRateBulkList = [];
+        $deleteTblStudentSkillRateBulkList = [];
         // "Data[PercentSkills][{$tblPerson->getId()}][$inputKey]";
-        // todo muss auch update können
-        // todo getStudentSkillRateBy
         if (isset($Data['PercentSkills'])) {
             foreach ($Data['PercentSkills'] as $personId => $personArray) {
                 if (($tblPerson = Person::useService()->getPersonById($personId))) {
                     foreach ($personArray as $key => $value) {
                         if ($value !== '') {
                             $value = trim(str_replace('%', '', $value));
-                            if (($tblStudentSkill = $this->getStudentSkillByFrontendKey(
-                                $key, $tblPerson, $tblYear, null, $tblPersonTeacher
-                            ))) {
-                                $tblStudentSkillRate = new TblStudentSkillRate();
-                                $tblStudentSkillRate->setTblStudentSkill($tblStudentSkill);
-                                $tblStudentSkillRate->setServiceTblPersonTeacher($tblPersonTeacher);
-                                $tblStudentSkillRate->setDate($datetime);
-                                $tblStudentSkillRate->setComment($comment);
-                                $tblStudentSkillRate->setRate($value);
-                                $tblStudentSkillRate->setTblStudentSkillRateType($tblStudentSkillRateType);
-                                $tblStudentSkillRate->setServiceTblPrepareCertificate($tblPrepareCertificate);
+                            if (($tblStudentSkill = $this->getStudentSkillByFrontendKey($key, $tblPerson, $tblYear, null, $tblPersonTeacher))) {
+                                if (($tblStudentSkillRate = SkillRate::useService()->getStudentSkillRateForCertificateBy($tblStudentSkill, $tblPrepareCertificate))) {
+                                    if ($value != $tblStudentSkillRate->getRate()) {
+                                        $tblStudentSkillRate->setRate($value);
+                                        $tblStudentSkillRate->setServiceTblPersonTeacher($tblPersonTeacher);
+                                        $updateTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
+                                    }
+                                } else {
+                                    $tblStudentSkillRate = new TblStudentSkillRate();
+                                    $tblStudentSkillRate->setTblStudentSkill($tblStudentSkill);
+                                    $tblStudentSkillRate->setServiceTblPersonTeacher($tblPersonTeacher);
+                                    $tblStudentSkillRate->setDate($datetime);
+                                    $tblStudentSkillRate->setComment($comment);
+                                    $tblStudentSkillRate->setRate($value);
+                                    $tblStudentSkillRate->setTblStudentSkillRateType($tblStudentSkillRateType);
+                                    $tblStudentSkillRate->setServiceTblPrepareCertificate($tblPrepareCertificate);
 
-                                $createTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
+                                    $createTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
+                                }
+                            }
+                        } else {
+                            if (($tblStudentSkill = $this->getStudentSkillByFrontendKey($key, $tblPerson, $tblYear, null, $tblPersonTeacher))
+                                && ($tblStudentSkillRate = SkillRate::useService()->getStudentSkillRateForCertificateBy($tblStudentSkill, $tblPrepareCertificate))
+                            ) {
+                                $deleteTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
                             }
                         }
                     }
@@ -989,20 +1016,34 @@ class Service extends AbstractService
                         if ($scoreTypeItemId > 0
                             && ($tblScoreTypeItem = ScoreType::useService()->getScoreTypeItemById($scoreTypeItemId))
                         ) {
-                            if (($tblStudentSkill = $this->getStudentSkillByFrontendKey(
-                                $key, $tblPerson, $tblYear, null, $tblPersonTeacher
-                            ))) {
-                                $tblStudentSkillRate = new TblStudentSkillRate();
-                                $tblStudentSkillRate->setTblStudentSkill($tblStudentSkill);
-                                $tblStudentSkillRate->setServiceTblPersonTeacher($tblPersonTeacher);
-                                $tblStudentSkillRate->setDate($datetime);
-                                $tblStudentSkillRate->setComment($comment);
-                                $tblStudentSkillRate->setRate($tblScoreTypeItem->getValue());
-                                $tblStudentSkillRate->setServiceTblScoreTypeItem($tblScoreTypeItem);
-                                $tblStudentSkillRate->setTblStudentSkillRateType($tblStudentSkillRateType);
-                                $tblStudentSkillRate->setServiceTblPrepareCertificate($tblPrepareCertificate);
+                            if (($tblStudentSkill = $this->getStudentSkillByFrontendKey($key, $tblPerson, $tblYear, null, $tblPersonTeacher))) {
+                                if (($tblStudentSkillRate = SkillRate::useService()->getStudentSkillRateForCertificateBy($tblStudentSkill, $tblPrepareCertificate))) {
+                                    $tempId = $tblStudentSkillRate->getServiceTblScoreTypeItem() ? $tblStudentSkillRate->getServiceTblScoreTypeItem()->getId() : null;
+                                    if ($scoreTypeItemId != $tempId) {
+                                        $tblStudentSkillRate->setRate($tblScoreTypeItem->getValue());
+                                        $tblStudentSkillRate->setServiceTblScoreTypeItem($tblScoreTypeItem);
+                                        $tblStudentSkillRate->setServiceTblPersonTeacher($tblPersonTeacher);
+                                        $updateTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
+                                    }
+                                } else {
+                                    $tblStudentSkillRate = new TblStudentSkillRate();
+                                    $tblStudentSkillRate->setTblStudentSkill($tblStudentSkill);
+                                    $tblStudentSkillRate->setServiceTblPersonTeacher($tblPersonTeacher);
+                                    $tblStudentSkillRate->setDate($datetime);
+                                    $tblStudentSkillRate->setComment($comment);
+                                    $tblStudentSkillRate->setRate($tblScoreTypeItem->getValue());
+                                    $tblStudentSkillRate->setServiceTblScoreTypeItem($tblScoreTypeItem);
+                                    $tblStudentSkillRate->setTblStudentSkillRateType($tblStudentSkillRateType);
+                                    $tblStudentSkillRate->setServiceTblPrepareCertificate($tblPrepareCertificate);
 
-                                $createTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
+                                    $createTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
+                                }
+                            }
+                        } else {
+                            if (($tblStudentSkill = $this->getStudentSkillByFrontendKey($key, $tblPerson, $tblYear, null, $tblPersonTeacher))
+                                && ($tblStudentSkillRate = SkillRate::useService()->getStudentSkillRateForCertificateBy($tblStudentSkill, $tblPrepareCertificate))
+                            ) {
+                                $deleteTblStudentSkillRateBulkList[] = $tblStudentSkillRate;
                             }
                         }
                     }
@@ -1012,6 +1053,12 @@ class Service extends AbstractService
 
         if ($createTblStudentSkillRateBulkList) {
             (new Data($this->getBinding()))->createEntityListBulk($createTblStudentSkillRateBulkList);
+        }
+        if ($updateTblStudentSkillRateBulkList) {
+            (new Data($this->getBinding()))->updateStudentSkillRateListBulk($updateTblStudentSkillRateBulkList);
+        }
+        if ($deleteTblStudentSkillRateBulkList) {
+            (new Data($this->getBinding()))->deleteEntityListBulk($deleteTblStudentSkillRateBulkList);
         }
 
         return new Success('Die Daten wurde erfolgreich gespeichert.');
@@ -1083,10 +1130,11 @@ class Service extends AbstractService
     /**
      * @param array $tblStudentSkillList
      * @param bool $isInterdisciplinary
+     * @param TblPrepareCertificate|null $tblPrepareCertificate
      *
      * @return array
      */
-    public function setStudentSkillsForDisplay(array $tblStudentSkillList, bool $isInterdisciplinary): array
+    public function setStudentSkillsForDisplay(array $tblStudentSkillList, bool $isInterdisciplinary, TblPrepareCertificate $tblPrepareCertificate = null): array
     {
         $showDisplay = ($tblSetting = Consumer::useService()->getSetting('Education', 'Competence', 'SkillRate', 'ShowDisplaySkillRate'))
             && $tblSetting->getValue();
@@ -1096,7 +1144,7 @@ class Service extends AbstractService
         foreach ($tblStudentSkillList as $tblStudentSkill) {
             // bei fächerübergreifenden Kompetenzen wir ein Durchschnitt über alle bewerteten Fächer gebildet (zuvor Durchschnitt für ein Fach)
             $displayLast = $isInterdisciplinary
-                ? SkillRate::useService()->getStudentSkillRateLastOrAverageValueForInterdisciplinaryOverAllSubjects($tblStudentSkill)
+                ? SkillRate::useService()->getStudentSkillRateLastOrAverageValueForInterdisciplinaryOverAllSubjects($tblStudentSkill, $tblPrepareCertificate)
                 : SkillRate::useService()->getStudentSkillRateLastOrAverageValue($tblStudentSkill, null, null);
 //            Debugger::devDump($displayLast);
             if ($displayLast['Value'] !== 0) {
