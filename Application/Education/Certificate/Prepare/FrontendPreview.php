@@ -7,6 +7,7 @@ use SPHERE\Application\Api\Education\Certificate\Generator\Certificate;
 use SPHERE\Application\Api\People\Meta\Support\ApiSupportReadOnly;
 use SPHERE\Application\Education\Absence\Absence;
 use SPHERE\Application\Education\Certificate\Setting\Setting;
+use SPHERE\Application\Education\Competence\SkillRate\SkillRate;
 use SPHERE\Application\Education\Graduation\Grade\Grade;
 use SPHERE\Application\Education\Lesson\DivisionCourse\DivisionCourse;
 use SPHERE\Application\Education\Lesson\Subject\Subject;
@@ -123,6 +124,10 @@ abstract class FrontendPreview extends FrontendLeaveTechnicalSchool
                 $countBehavior = count($tblGradeTypeList);
             }
 
+            $isCompetenceCertificate = ($tblGenerateCertificate = $tblPrepare->getServiceTblGenerateCertificate())
+                && ($tblCertificateType = $tblGenerateCertificate->getServiceTblCertificateType())
+                && str_contains($tblCertificateType->getIdentifier(), 'SKILL_');
+
             if ($isDiploma) {
                 $columnTable = array(
                     'Number' => '#',
@@ -140,7 +145,7 @@ abstract class FrontendPreview extends FrontendLeaveTechnicalSchool
                     'ExcusedAbsence' => 'E-FZ', //'ent&shy;schuld&shy;igte FZ',
                     'UnexcusedAbsence' => 'U-FZ', // 'unent&shy;schuld&shy;igte FZ',
                     'SubjectGrades' => 'Fachnoten',
-                    'BehaviorGrades' => 'Kopfnoten',
+                    'BehaviorGrades' => $isCompetenceCertificate ? 'Fächerübergreifende Kompetenzen' : 'Kopfnoten',
                 );
             }
 
@@ -220,13 +225,19 @@ abstract class FrontendPreview extends FrontendLeaveTechnicalSchool
                         if (isset($certificateList[$tblCertificate->getId()]['BehaviorGrades'])) {
                             $hasBehaviorGrades = $certificateList[$tblCertificate->getId()]['BehaviorGrades'];
                         } else {
-                            $hasBehaviorGrades = Prepare::useService()->hasCertificateBehaviorGrades($tblCertificate, $tblPerson);
+                            // Kompetenzzeugnisse haben immer "Kopfnoten" (fächerübergreifende Kompetenzen)
+                            if ($isCompetenceCertificate) {
+                                $hasBehaviorGrades = true;
+                            } else {
+                                $hasBehaviorGrades = Prepare::useService()->hasCertificateBehaviorGrades($tblCertificate, $tblPerson);
+                            }
+
                             $certificateList[$tblCertificate->getId()]['BehaviorGrades'] = $hasBehaviorGrades;
                         }
 
                         // Kompetenzzeugnisse können keine Fachnoten haben
                         if (!$hasColumnSubjectGrades
-                            && !str_contains($tblCertificate->getTblCertificateType()->getIdentifier(), 'SKILL')
+                            && !$isCompetenceCertificate
                         ) {
                             $hasColumnSubjectGrades = true;
                         }
@@ -276,20 +287,28 @@ abstract class FrontendPreview extends FrontendLeaveTechnicalSchool
 
                         if ($hasBehaviorGrades) {
                             $hasColumnBehaviorGrades = true;
-                            // Kopfnoten zählen
-                            $countBehaviorGrades = 0;
-                            if ($tblBehaviorTask) {
-                                if (($tblTaskGradeList = Prepare::useService()->getBehaviorGradeAllByPrepareCertificateAndPerson($tblPrepare, $tblPerson))) {
-                                    $countBehaviorGrades = count($tblTaskGradeList);
-                                }
-                                $behaviorGradesText = $countBehaviorGrades . ' von ' . $countBehavior; // . ' Zensuren&nbsp;';
+                            $skillList = [];
+                            if ($isCompetenceCertificate) {
+                                $behaviorGradesDisplayText = SkillRate::useFrontend()->getDisplayStudentSkills(
+                                    $tblPerson, $tblYear, null, null, $skillList, $tblPrepare
+                                );
                             } else {
-                                $behaviorGradesText = 'Kein Kopfnoten&shy;auftrag ausgewählt';
-                            }
+                                // Kopfnoten zählen
+                                $countBehaviorGrades = 0;
+                                if ($tblBehaviorTask) {
+                                    if (($tblTaskGradeList = Prepare::useService()->getBehaviorGradeAllByPrepareCertificateAndPerson($tblPrepare,
+                                        $tblPerson))) {
+                                        $countBehaviorGrades = count($tblTaskGradeList);
+                                    }
+                                    $behaviorGradesText = $countBehaviorGrades . ' von ' . $countBehavior; // . ' Zensuren&nbsp;';
+                                } else {
+                                    $behaviorGradesText = 'Kein Kopfnoten&shy;auftrag ausgewählt';
+                                }
 
-                            $behaviorGradesDisplayText = $countBehaviorGrades < $countBehavior || !$tblBehaviorTask
-                                ? new WarningText(new Exclamation() . ' ' . $behaviorGradesText)
-                                : new Success(new Enable() . ' ' . $behaviorGradesText);
+                                $behaviorGradesDisplayText = $countBehaviorGrades < $countBehavior || !$tblBehaviorTask
+                                    ? new WarningText(new Exclamation() . ' ' . $behaviorGradesText)
+                                    : new Success(new Enable() . ' ' . $behaviorGradesText);
+                            }
                         }
                     }
 

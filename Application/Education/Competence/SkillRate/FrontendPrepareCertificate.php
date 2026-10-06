@@ -149,6 +149,9 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
         ) {
             foreach ($tblPersonList as $tblPerson) {
                 if (isset($studentSkillList[$tblPerson->getId()])) {
+                    $tblPrepareStudent = Prepare::useService()->getPrepareStudentBy($tblPrepareCertificate, $tblPerson);
+                    $isApproved = $tblPrepareStudent && $tblPrepareStudent->isApproved();
+
                     // Schüler-Informationen
                     Grade::useService()->setStudentInfo($tblPerson, $tblYear, $integrationList, $pictureList, $courseList);
 
@@ -158,7 +161,7 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
 
                     $tblStudentSkillRate = false;
                     $virtualStudentSkill = $studentSkillList[$tblPerson->getId()];
-                    $averageArray['Value'] = '';
+                    $averageArray['Value'] = 0;
                     if ($virtualStudentSkill instanceof TblStudentSkill) {
                         $averageArray = SkillRate::useService()->getStudentSkillRateLastOrAverageValueForInterdisciplinaryOverAllSubjects($virtualStudentSkill);
                         $bodyList[$tblPerson->getId()]['SkillRates'] = $gradeFrontend->getTableColumnBody(
@@ -189,7 +192,7 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
                         }
                         $global->savePost();
                     // Bewertungsvorschlag eintragen
-                    } elseif ($averageArray['Value'] !== '') {
+                    } elseif ($averageArray['Value'] !== 0 && !$isApproved) {
                         $isGradeProposal = true;
                         $hasProposalGrades = true;
                         $global = $this->getGlobal();
@@ -213,10 +216,16 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
                         $identifier = "Data[ScoreTypeSkills][{$tblPerson->getId()}][$inputKey]";
                         foreach ($tblScoreType->getScoreTypeItems() as $tblScoreTypeItem) {
                             $input = new RadioBox($identifier, '&nbsp;', $tblScoreTypeItem->getId());
+                            if ($isApproved) {
+                                $input->setDisabled();
+                            }
                             $bodyList[$tblPerson->getId()]['ScoreTypeId_' . $tblScoreTypeItem->getId()] = $gradeFrontend->getTableColumnBody($input);
                         }
                         // erforderlich fürs Entfernen der Radiooption, wenn einmal gesetzt
                         $input = new RadioBox($identifier, '&nbsp;', 0);
+                        if ($isApproved) {
+                            $input->setDisabled();
+                        }
                         $bodyList[$tblPerson->getId()]['ScoreTypeId_0'] = $gradeFrontend->getTableColumnBody($input);
                     } elseif ($isDiverseScoreType
                         && isset($studentSkillList[$tblPerson->getId()])
@@ -228,6 +237,9 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
                         if ($isGradeProposal) {
                             $input->setPrefixValue('Vorschlag');
                         }
+                        if ($isApproved) {
+                            $input->setDisabled();
+                        }
                         $bodyList[$tblPerson->getId()]['Diverse'] = $gradeFrontend->getTableColumnBody($input);
                     } else {
                         // Prozent
@@ -235,6 +247,9 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
                         $input = new TextField($identifier);
                         if ($isGradeProposal) {
                             $input->setPrefixValue('Vorschlag');
+                        }
+                        if ($isApproved) {
+                            $input->setDisabled();
                         }
 
                         // Anzeige Fehlermeldung

@@ -6,6 +6,7 @@ use DateTime;
 use SPHERE\Application\Api\Document\Storage\ApiPersonPicture;
 use SPHERE\Application\Api\Education\Competence\ApiSkillRate;
 use SPHERE\Application\Api\People\Meta\Support\ApiSupportReadOnly;
+use SPHERE\Application\Education\Certificate\Prepare\Service\Entity\TblPrepareCertificate;
 use SPHERE\Application\Education\Competence\ScoreType\Service\Entity\TblScoreType;
 use SPHERE\Application\Education\Competence\SkillGrid\SkillGrid;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkill;
@@ -31,6 +32,7 @@ use SPHERE\Common\Frontend\Icon\Repository\Calendar;
 use SPHERE\Common\Frontend\Icon\Repository\ChevronLeft;
 use SPHERE\Common\Frontend\Icon\Repository\ClipBoard;
 use SPHERE\Common\Frontend\Icon\Repository\Disable;
+use SPHERE\Common\Frontend\Icon\Repository\Enable;
 use SPHERE\Common\Frontend\Icon\Repository\Exclamation;
 use SPHERE\Common\Frontend\Icon\Repository\EyeOpen;
 use SPHERE\Common\Frontend\Icon\Repository\Save;
@@ -50,6 +52,8 @@ use SPHERE\Common\Frontend\Message\Repository\Warning;
 use SPHERE\Common\Frontend\Text\Repository\Bold;
 use SPHERE\Common\Frontend\Text\Repository\Muted;
 use SPHERE\Common\Frontend\Text\Repository\Small;
+use SPHERE\Common\Frontend\Text\Repository\Success;
+use SPHERE\Common\Frontend\Text\Repository\Warning as WarningText;
 use SPHERE\Common\Window\Stage;
 use SPHERE\System\Extension\Extension;
 
@@ -229,11 +233,13 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
      * @param TblSubject|null $tblSubject
      * @param TblSubject|null $tblSubjectForSkillRate
      * @param $skillList
+     * @param TblPrepareCertificate|null $tblPrepareCertificate
      *
      * @return string
      */
-    private function getDisplayStudentSkills(
-        TblPerson $tblPerson, TblYear $tblYear, ?TblSubject $tblSubject, ?TblSubject $tblSubjectForSkillRate, &$skillList
+    public function getDisplayStudentSkills(
+        TblPerson $tblPerson, TblYear $tblYear, ?TblSubject $tblSubject, ?TblSubject $tblSubjectForSkillRate, &$skillList,
+        TblPrepareCertificate $tblPrepareCertificate = null
     ): string {
         $countTotal = 0;
         $countRates = 0;
@@ -260,32 +266,54 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
             $skills = [];
             foreach ($tblSkillList as $tblSkill) {
                 $countTotal++;
-                $tblStudentSkill = $tblStudentSkillList['SkillId_' . $tblSkill->getId()] ?? null;
-                if ($tblStudentSkill && SkillRate::useService()->getStudentSkillRateListForRateBy($tblStudentSkill, $tblSubjectForSkillRate)) {
-                    $countRates++;
-                }
+                if (($tblStudentSkill = $tblStudentSkillList['SkillId_' . $tblSkill->getId()] ?? null)) {
+                    if ($tblPrepareCertificate) {
+                        if (SkillRate::useService()->getStudentSkillRateForCertificateBy($tblStudentSkill, $tblPrepareCertificate)) {
+                            $countRates++;
+                        }
+                    } else {
+                        if (SkillRate::useService()->getStudentSkillRateListForRateBy($tblStudentSkill, $tblSubjectForSkillRate)) {
+                            $countRates++;
+                        }
+                    }
 
-                $skills[$tblSkill->getId()] = 1;
+                    $skills[$tblSkill->getId()] = 1;
+                }
             }
             // individuelle Kompetenzen ohne Kompetenzraster oder von einer anderen Klassenstufe
             foreach ($tblStudentSkillList as $tblStudentSkill) {
                 if (!$tblStudentSkill->getServiceTblSkill() || !isset($skills[$tblStudentSkill->getServiceTblSkill()->getId()])) {
                     $countTotal++;
-                    if (SkillRate::useService()->getStudentSkillRateListForRateBy($tblStudentSkill, $tblSubjectForSkillRate)) {
-                        $countRates++;
+                    if ($tblPrepareCertificate) {
+                        if (SkillRate::useService()->getStudentSkillRateForCertificateBy($tblStudentSkill, $tblPrepareCertificate)) {
+                            $countRates++;
+                        }
+                    } else {
+                        if (SkillRate::useService()->getStudentSkillRateListForRateBy($tblStudentSkill, $tblSubjectForSkillRate)) {
+                            $countRates++;
+                        }
                     }
                 }
             }
         }
 
-        if ($tblSupportFocusType && $countTotal == 0) {
-            return new \SPHERE\Common\Frontend\Text\Repository\Warning("Es existieren Kompetenzraster mit und ohne den 
+        if ($tblPrepareCertificate) {
+            $text = "$countRates von $countTotal "
+                . ($tblSubject ? "Fach-" : "fächerübergreifende ")
+                . "Kompetenzen bewertet.";
+            return $countRates < $countTotal
+                ? new WarningText(new Exclamation() . ' ' . $text)
+                : new Success(new Enable() . ' ' . $text);
+        } else {
+            if ($tblSupportFocusType && $countTotal == 0) {
+                return new WarningText("Es existieren Kompetenzraster mit und ohne den 
                 Förderschwerpunkt: {$tblSupportFocusType->getName()}.<br> 
                 Bitte wählen Sie für den Schüler die entsprechenden Kompetenzen bei der Kompetenzbewertung über: \"Kompetenzen auswählen\" aus.");
-        } else {
-            return "$countRates von $countTotal "
-                . ($tblSubject ? "Fach-" : "fächerübergreifende ")
-                ."Kompetenzen bewertet.";
+            } else {
+                return "$countRates von $countTotal "
+                    . ($tblSubject ? "Fach-" : "fächerübergreifende ")
+                    . "Kompetenzen bewertet.";
+            }
         }
     }
 
