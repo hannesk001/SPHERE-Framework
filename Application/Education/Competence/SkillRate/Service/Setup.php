@@ -89,6 +89,7 @@ class Setup extends AbstractSetup
         $this->createColumn($table, 'serviceTblPrepareCertificate', self::FIELD_TYPE_BIGINT, true);
 
         // todo indexe
+        $this->createIndex($table, ['tblCompetenceStudentSkill', 'tblCompetenceStudentSkillRateType', 'serviceTblPrepareCertificate']);
     }
 
     /**

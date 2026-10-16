@@ -21,7 +21,10 @@ use SPHERE\Common\Frontend\Form\Structure\FormGroup;
 use SPHERE\Common\Frontend\Form\Structure\FormRow;
 use SPHERE\Common\Frontend\Icon\Repository\Exclamation;
 use SPHERE\Common\Frontend\Icon\Repository\Save;
+use SPHERE\Common\Frontend\Layout\Repository\Container;
+use SPHERE\Common\Frontend\Layout\Repository\ProgressBar;
 use SPHERE\Common\Frontend\Link\Repository\Primary;
+use SPHERE\Common\Frontend\Link\Repository\Standard;
 use SPHERE\Common\Frontend\Message\Repository\Danger;
 use SPHERE\Common\Frontend\Message\Repository\Warning;
 
@@ -37,21 +40,46 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
      */
     public function loadPrepareCompetenceContent(TblDivisionCourse $tblDivisionCourse, TblPrepareCertificate $tblPrepareCertificate, string $Route, $NextSkillId): string
     {
-        $content = '';
+        $Data = null;
         if ($NextSkillId) {
             $global = $this->getGlobal();
             $global->POST['Data']['Id'] = $NextSkillId;
+            $Data = ['Id' => $NextSkillId];
             $global->savePost();
-
-            $content = $this->loadEditPrepareInterdisciplinaryContent($tblDivisionCourse->getId(), $tblPrepareCertificate->getId(), $Route, ['Id' => $NextSkillId]);
         }
 
-        // erstmal nur von Kompetenzraster möglich, todo eigene sind ja individuell
         $skillList = SkillRate::useService()->getSkillListByDivisionCourse($tblDivisionCourse);
         $list = [];
+        $tblYear = $tblDivisionCourse->getServiceTblYear();
+        $tblPersonList = $tblDivisionCourse->getStudentsWithSubCourses();
+        $countPersonsTotal = 0;
+        $countSkillRateTotal = 0;
         foreach ($skillList as $tblSkill) {
-            $list[] = new SelectBoxItem($tblSkill->getId(), $tblSkill->getDisplayName());
+            $countPersons = 0;
+            $countSkillRate = 0;
+            if ($tblYear
+                && $tblPersonList
+            ) {
+                foreach ($tblPersonList as $tblPerson) {
+                    if (($virtualStudentSkill = SkillRate::useService()->getVirtualStudentSkillBySkillName($tblPerson, $tblYear, $tblSkill))) {
+                        $countPersons++;
+                        if ($virtualStudentSkill instanceof TblStudentSkill
+                            && SkillRate::useService()->getStudentSkillRateForCertificateBy($virtualStudentSkill, $tblPrepareCertificate)
+                        ) {
+                            $countSkillRate++;
+                        }
+                    }
+                }
+            }
+
+            $countPersonsTotal += $countPersons;
+            $countSkillRateTotal += $countSkillRate;
+
+            $list[] = new SelectBoxItem($tblSkill->getId(), $tblSkill->getDisplayName() . " ($countSkillRate von $countPersons bewertet)");
         }
+
+        $normalizedDone = ($countSkillRateTotal / $countPersonsTotal) * 100;
+//        $normalizedPlan = (($countPersonsTotal - $countSkillRateTotal) / $countPersonsTotal) * 100;
 
         return (new Form(new FormGroup([
             new FormRow(
@@ -62,8 +90,20 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
                 )
             ),
             new FormRow(
+                new FormColumn([
+                    new Container(
+//                        (new ProgressBar($normalizedDone, $normalizedPlan, 100, 20)),
+                        (new ProgressBar($normalizedDone, 100, 0, 20)),
+                    ),
+                    new Container('&nbsp;')
+                ])
+            ),
+            new FormRow(
                 new FormColumn(
-                    ApiSkillCertificate::receiverBlock($content, 'SkillRateContent')
+                    ApiSkillCertificate::receiverBlock(
+                        $this->loadEditPrepareInterdisciplinaryContent($tblDivisionCourse->getId(), $tblPrepareCertificate->getId(), $Route, $Data),
+                        'SkillRateContent'
+                    )
                 )
             )
         ])))->disableSubmitAction();
@@ -268,16 +308,17 @@ class FrontendPrepareCertificate extends FrontendDivisionCourse
                 ? $this->getNextId(SkillRate::useService()->getSkillListByDivisionCourse($tblDivisionCourse), $tblSkill->getId())
                 : null;
 
+            $parameters = $nextSkillId
+                ? ['PrepareId' => $PrepareCertificateId, 'NextSkillId' => $nextSkillId, 'Route' => $Route, 'IsNotGradeType' => false]
+                : ['PrepareId' => $PrepareCertificateId, 'Route' => $Route, 'IsNotGradeType' => true];
+
             return ($hasProposalGrades ? new Warning('Es wurden noch nicht alle Bewertungsvorschläge gespeichert.', new Exclamation()) : '')
                 . $gradeFrontend->getTableCustom($headerList, $bodyList)
                 . ($ErrorList ? new Danger("Die Daten wurden nicht gespeichert. Bitte beachten Sie die Fehlermeldungen weiter oben.") : '')
                 . (new Primary('Speichern', ApiSkillCertificate::getEndpoint(), new Save()))
                     ->ajaxPipelineOnClick(ApiSkillCertificate::pipelineSaveEditDivisionCourseSkillRate(
                         $DivisionCourseId, $PrepareCertificateId, $Route, $nextSkillId))
-//                . (new Standard('Abbrechen', '/Education/Competence/SkillRate', new Disable()))
-//                    ->ajaxPipelineOnClick(ApiSkillRate::pipelineLoadViewDivisionCourseContent(
-//                        $DivisionCourseId, $SubjectId, $SelectedYearId, $IsInterdisciplinary ? 'true' : 'false'))
-                ;
+                . (new Standard('Ohne Speichern weiter', '/Education/Certificate/Prepare/Prepare/Setting', null, $parameters));
         }
 
         return new Warning('Keine Schüler für die ausgewählten Kompetenz gefunden.', new Exclamation());
