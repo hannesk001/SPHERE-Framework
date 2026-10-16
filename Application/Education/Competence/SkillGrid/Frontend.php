@@ -112,6 +112,7 @@ class Frontend extends Extension implements IFrontendInterface
                     'Subject' => ($tblSubject = $tblSkillGrid->getServiceTblSubject()) ? $tblSubject->getDisplayName() : '',
                     'Name' => $tblSkillGrid->getName(),
                     'SkillAreas' => $tblSkillGrid->getDisplaySkillAreas(),
+                    'ScoreType' => ($tblScoreType = $tblSkillGrid->getServiceTblScoreType()) ? $tblScoreType->getName() : 'Prozent',
                     'Option' => new Standard('', '/Education/Competence/SkillGrid/Edit', new Edit(),
                         ['SchoolTypeId' => $SchoolTypeId, 'Filter' => $Filter, 'SkillGridId' => $tblSkillGrid->getId()],
                         'Kompetenzraster bearbeiten')
@@ -130,6 +131,7 @@ class Frontend extends Extension implements IFrontendInterface
                     'Subject' => 'Fach',
                     'Name' => 'Name',
                     'SkillAreas' => 'Kompetenzbereiche',
+                    'ScoreType' => 'Bewertungssystem',
                     'Option' => ' '
                 ],
                 [
