@@ -6,6 +6,7 @@ use DateTime;
 use SPHERE\Application\Api\Document\Storage\ApiPersonPicture;
 use SPHERE\Application\Api\Education\Competence\ApiSkillRate;
 use SPHERE\Application\Api\People\Meta\Support\ApiSupportReadOnly;
+use SPHERE\Application\Education\Certificate\Prepare\Prepare;
 use SPHERE\Application\Education\Certificate\Prepare\Service\Entity\TblPrepareCertificate;
 use SPHERE\Application\Education\Competence\ScoreType\Service\Entity\TblScoreType;
 use SPHERE\Application\Education\Competence\SkillGrid\SkillGrid;
@@ -23,6 +24,7 @@ use SPHERE\Common\Frontend\Form\Repository\Field\CheckBox;
 use SPHERE\Common\Frontend\Form\Repository\Field\DatePicker;
 use SPHERE\Common\Frontend\Form\Repository\Field\RadioBox;
 use SPHERE\Common\Frontend\Form\Repository\Field\SelectBox;
+use SPHERE\Common\Frontend\Form\Repository\Field\TextArea;
 use SPHERE\Common\Frontend\Form\Repository\Field\TextField;
 use SPHERE\Common\Frontend\Form\Structure\Form;
 use SPHERE\Common\Frontend\Form\Structure\FormColumn;
@@ -31,6 +33,7 @@ use SPHERE\Common\Frontend\Form\Structure\FormRow;
 use SPHERE\Common\Frontend\Icon\Repository\Calendar;
 use SPHERE\Common\Frontend\Icon\Repository\ChevronLeft;
 use SPHERE\Common\Frontend\Icon\Repository\ClipBoard;
+use SPHERE\Common\Frontend\Icon\Repository\Comment;
 use SPHERE\Common\Frontend\Icon\Repository\Disable;
 use SPHERE\Common\Frontend\Icon\Repository\Enable;
 use SPHERE\Common\Frontend\Icon\Repository\Exclamation;
@@ -186,6 +189,22 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
                 );
             }
 
+            // Fach-Bemerkung fürs Zeugnis, erstmal nur fürs Fach und nicht für fächerübergreifend
+            $buttonsPrepare = '';
+            if (!$IsInterdisciplinary) {
+                $tblPrepareList = Prepare::useService()->getPrepareAllByDivisionCourseAndCompetenceCertificate($tblDivisionCourse);
+                foreach ($tblPrepareList as $tblPrepare) {
+                    $text = ($IsInterdisciplinary ? 'Fächerübergreifende ' : 'Fach-') . 'Bemerkung';
+                    $tblCertificateType = $tblPrepare->getCertificateType();
+                    $tooltip = $text . ' für ' . ($tblCertificateType ? $tblCertificateType->getName() : '') . ' (' . $tblPrepare->getDate() . ')';
+                    $buttonsPrepare .= (new Primary($text, ApiSkillRate::getEndpoint(),
+                        new Comment(), [], $tooltip))
+                        ->ajaxPipelineOnClick(ApiSkillRate::pipelineLoadEditDivisionCourseRemarkContent(
+                            $DivisionCourseId, $SubjectId, $tblPrepare->getId(), $IsInterdisciplinary ? 'true' : 'false'
+                        ));
+                }
+            }
+
             $actions = new Layout(new LayoutGroup(new LayoutRow(array(
                 new LayoutColumn(
                     ($isEdit
@@ -193,6 +212,7 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
                             ->ajaxPipelineOnClick(ApiSkillRate::pipelineLoadEditDivisionCourseContent(
                                 $DivisionCourseId, $SubjectId, $SelectedYearId, $IsInterdisciplinary ? 'true' : 'false'
                             ))
+                            . $buttonsPrepare
                         : ''
                     )
                     , 6),
@@ -568,5 +588,110 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
         }
 
         return new Warning('Keine Schüler für die ausgewählten Kompetenz gefunden.', new Exclamation());
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $SubjectId
+     * @param $PrepareId
+     * @param $IsInterdisciplinary
+     *
+     * @return string
+     */
+    public function loadEditDivisionCourseRemarkContent($DivisionCourseId, $SubjectId, $PrepareId, $IsInterdisciplinary): string
+    {
+        if (!($tblDivisionCourse = DivisionCourse::useService()->getDivisionCourseById($DivisionCourseId))) {
+            return new Danger('Kurs nicht gefunden.', new Exclamation());
+        }
+
+        if (!($tblPrepare = Prepare::useService()->getPrepareById($PrepareId))) {
+            return new Danger('Zeugnisauftrag nicht gefunden.', new Exclamation());
+        }
+
+        $tblSubject = Subject::useService()->getSubjectById($SubjectId) ?: null;
+
+        $gradeFrontend = Grade::useFrontend();
+        $bodyList = [];
+
+        $integrationList = array();
+        $pictureList = array();
+        $courseList = array();
+        if (($tblPersonList = $tblDivisionCourse->getStudentsWithSubCourses())
+            && ($tblYear = $tblDivisionCourse->getServiceTblYear())
+        ) {
+            foreach ($tblPersonList as $tblPerson) {
+                // Schüler-Informationen
+                Grade::useService()->setStudentInfo($tblPerson, $tblYear, $integrationList, $pictureList, $courseList);
+            }
+        }
+
+        $hasPicture = !empty($pictureList);
+        $hasIntegration = !empty($integrationList);
+        $hasCourse = !empty($courseList);
+        $headerList = $gradeFrontend->getGradeBookPreHeaderList($hasPicture, $hasIntegration, $hasCourse);
+        $headerList['Remark'] = $gradeFrontend->getTableColumnHead('Bemerkung');
+
+        $count = 0;
+        if ($tblPersonList) {
+            if (($tblStudentSubjectRemarkList = SkillRate::useService()->getStudentSubjectRemarkByPrepare($tblPrepare, $tblSubject))) {
+                $global = $this->getGlobal();
+                foreach ($tblStudentSubjectRemarkList as $tblStudentSubjectRemark) {
+                    if (($tblPerson = $tblStudentSubjectRemark->getServiceTblPerson())) {
+                        $global->POST['Data'][$tblPerson->getId()] = $tblStudentSubjectRemark->getRemark();
+                    }
+                }
+                $global->savePost();
+            }
+
+            foreach ($tblPersonList as $tblPerson) {
+                $bodyList[$tblPerson->getId()] = $gradeFrontend->getGradeBookPreBodyList($tblPerson, ++$count,
+                    $hasPicture, $hasIntegration, $hasCourse,
+                    $pictureList, $integrationList, $courseList);
+
+                $input = (new TextArea('Data[' . $tblPerson->getId() . ']', '', ''));
+                // sperren der Eingabe bei Zeugnisfreigabe
+                if (($tblPrepareStudent = Prepare::useService()->getPrepareStudentBy($tblPrepare, $tblPerson))
+                    && $tblPrepareStudent->isApproved()
+                ) {
+                    $input->setDisabled();
+                }
+                $bodyList[$tblPerson->getId()]['Remark'] = $gradeFrontend->getTableColumnBody($input);
+            }
+        }
+
+        $text = ($IsInterdisciplinary ? 'Fächerübergreifende ' : 'Fach-') . 'Bemerkung';
+        $tblCertificateType = $tblPrepare->getCertificateType();
+        $subTitle = $text . ' für ' . ($tblCertificateType ? $tblCertificateType->getName() : '') . ' (' . $tblPrepare->getDate() . ')';
+
+        return
+            new Title(
+                new Standard("Zurück", "/Education/Competence/SkillRate/DivisionCourse", new ChevronLeft(),
+                    ['DivisionCourseId' => $DivisionCourseId, 'SubjectId' => $SubjectId, 'SelectedYearId' => $PrepareId,
+                        'IsInterdisciplinary' => $IsInterdisciplinary])
+                . "&nbsp;&nbsp;&nbsp;Kompetenzbewertung"
+                . new Muted(new Small(" für Kurs: ")) . new Bold($tblDivisionCourse->getDisplayName())
+                . new Muted(new Small(" im Fach: ")) . new Bold($tblSubject?->getDisplayName())
+            )
+            . new Well(
+                (new Form(new FormGroup([
+                    new FormRow(
+                        new FormColumn(
+                            $gradeFrontend->getTableCustom($headerList, $bodyList)
+                        )
+                    ),
+                    new FormRow([
+                        new FormColumn(
+                            new Container(
+                                (new Primary('Speichern', ApiSkillRate::getEndpoint(), new Save()))
+                                ->ajaxPipelineOnClick(ApiSkillRate::pipelineSaveEditDivisionCourseRemark(
+                                    $DivisionCourseId, $SubjectId, $PrepareId, $IsInterdisciplinary ? 'true' : 'false'))
+                                . (new Standard('Abbrechen', '/Education/Competence/SkillRate', new Disable()))
+                                    ->ajaxPipelineOnClick(ApiSkillRate::pipelineLoadViewDivisionCourseContent(
+                                        $DivisionCourseId, $SubjectId, null, $IsInterdisciplinary ? 'true' : 'false'))
+                            )
+                        ),
+                    ])
+                ], new \SPHERE\Common\Frontend\Form\Repository\Title($subTitle))))->disableSubmitAction()
+            );
     }
 }

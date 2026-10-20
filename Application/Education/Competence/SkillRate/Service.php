@@ -13,6 +13,7 @@ use SPHERE\Application\Education\Competence\SkillRate\Service\Data;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkill;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRate;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRateType;
+use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSubjectRemark;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Setup;
 use SPHERE\Application\Education\Lesson\DivisionCourse\DivisionCourse;
 use SPHERE\Application\Education\Lesson\DivisionCourse\Service\Entity\TblDivisionCourse;
@@ -223,6 +224,31 @@ class Service extends AbstractService
         }
 
         return null;
+    }
+
+    /**
+     * @param TblPrepareCertificate|null $tblPrepareCertificate
+     * @param TblPerson $tblPerson
+     * @param TblSubject|null $tblSubject
+     *
+     * @return false|TblStudentSubjectRemark
+     */
+    public function getStudentSubjectRemarkByStudent(
+        ?TblPrepareCertificate $tblPrepareCertificate, TblPerson $tblPerson, ?TblSubject $tblSubject
+    ): false|TblStudentSubjectRemark {
+        return (new Data($this->getBinding()))->getStudentSubjectRemarkByStudent($tblPrepareCertificate, $tblPerson, $tblSubject);
+    }
+
+    /**
+     * @param TblPrepareCertificate|null $tblPrepareCertificate
+     * @param TblSubject|null $tblSubject
+     *
+     * @return false|TblStudentSubjectRemark[]
+     */
+    public function getStudentSubjectRemarkByPrepare(
+        ?TblPrepareCertificate $tblPrepareCertificate, ?TblSubject $tblSubject
+    ): false|array {
+        return (new Data($this->getBinding()))->getStudentSubjectRemarkByPrepare($tblPrepareCertificate, $tblSubject);
     }
 
     /**
@@ -1217,5 +1243,63 @@ class Service extends AbstractService
         }
 
         return $skillAreaList;
+    }
+
+    /**
+     * @param TblDivisionCourse $tblDivisionCourse
+     * @param TblPrepareCertificate $tblPrepareCertificate
+     * @param TblSubject|null $tblSubject
+     * @param bool $IsInterdisciplinary
+     * @param $Data
+     *
+     * @return string
+     */
+    public function createDivisionCourseRemarkList(
+        TblDivisionCourse $tblDivisionCourse, TblPrepareCertificate $tblPrepareCertificate, ?TblSubject $tblSubject, bool $IsInterdisciplinary, $Data
+    ): string {
+        $tblPersonTeacher = Account::useService()->getPersonByLogin() ?: null;
+        $createList = [];
+        $updateList = [];
+        $deleteList = [];
+        foreach ($Data as $personId => $value) {
+            if (($tblPerson = Person::useService()->getPersonById($personId))) {
+                if ($value !== '') {
+                    if (($tblStudentSubjectRemark = $this->getStudentSubjectRemarkByStudent($tblPrepareCertificate, $tblPerson, $tblSubject))) {
+                        if ($value != $tblStudentSubjectRemark->getRemark()) {
+                            $tblStudentSubjectRemark->setRemark($value);
+                            $tblStudentSubjectRemark->setServiceTblPersonTeacher($tblPersonTeacher);
+                            $updateList[] = $tblStudentSubjectRemark;
+                        }
+                    } else {
+                        $tblStudentSubjectRemark = new TblStudentSubjectRemark();
+                        $tblStudentSubjectRemark->setServiceTblPrepareCertificate($tblPrepareCertificate);
+                        $tblStudentSubjectRemark->setServiceTblPerson($tblPerson);
+                        $tblStudentSubjectRemark->setServiceTblSubject($tblSubject);
+                        $tblStudentSubjectRemark->setRemark($value);
+                        $tblStudentSubjectRemark->setServiceTblPersonTeacher($tblPersonTeacher);
+                        $createList[] = $tblStudentSubjectRemark;
+                    }
+                } else {
+                    if (($tblStudentSubjectRemark = $this->getStudentSubjectRemarkByStudent($tblPrepareCertificate, $tblPerson, $tblSubject))) {
+                        $deleteList[] = $tblStudentSubjectRemark;
+                    }
+                }
+            }
+        }
+
+        if ($createList) {
+            (new Data($this->getBinding()))->createEntityListBulk($createList);
+        }
+        if ($updateList) {
+            (new Data($this->getBinding()))->updateStudentSubjectRemarkListBulk($updateList);
+        }
+        if ($deleteList) {
+            (new Data($this->getBinding()))->deleteEntityListBulk($deleteList);
+        }
+
+        return new Success('Die Daten wurde erfolgreich gespeichert.')
+            . new Redirect('/Education/Competence/SkillRate/DivisionCourse', Redirect::TIMEOUT_SUCCESS,
+                ['DivisionCourseId' => $tblDivisionCourse->getId(), 'SubjectId' => $tblSubject?->getId(), 'SelectedYearId' => null,
+                    'IsInterdisciplinary' => $IsInterdisciplinary]);
     }
 }

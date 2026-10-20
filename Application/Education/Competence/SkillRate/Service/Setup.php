@@ -24,6 +24,7 @@ class Setup extends AbstractSetup
         $tblStudentSkill = $this->setTableStudentSkill($schema);
         $tblStudentSkillRateType = $this->setTableStudentSkillRateType($schema);
         $this->setTableStudentSkillRate($schema, $tblStudentSkill, $tblStudentSkillRateType);
+        $this->setTableStudentSubjectRemark($schema);
 
         /**
          * Migration & Protocol
@@ -106,8 +107,25 @@ class Setup extends AbstractSetup
 
         $this->createIndex($table, array('Identifier'));
 
-
-
         return $table;
+    }
+
+    /**
+     * @param Schema $schema
+     *
+     * @return void
+     */
+    private function setTableStudentSubjectRemark(Schema $schema): void
+    {
+        $table = $this->createTable($schema, 'tblCompetenceStudentSubjectRemark');
+
+        $this->createColumn($table, 'serviceTblPrepareCertificate', self::FIELD_TYPE_BIGINT, true);
+        $this->createColumn($table, 'serviceTblPerson', self::FIELD_TYPE_BIGINT);
+        $this->createColumn($table, 'serviceTblSubject', self::FIELD_TYPE_BIGINT, true);
+        $this->createColumn($table, 'Remark', self::FIELD_TYPE_TEXT);
+        $this->createColumn($table, 'serviceTblPersonTeacher', self::FIELD_TYPE_BIGINT, true);
+
+        $this->createIndex($table, ['serviceTblPrepareCertificate', 'serviceTblPerson', 'serviceTblSubject']);
+        $this->createIndex($table, ['serviceTblPrepareCertificate', 'serviceTblSubject'], false);
     }
 }

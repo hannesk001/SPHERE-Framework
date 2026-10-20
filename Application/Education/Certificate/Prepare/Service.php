@@ -1297,6 +1297,36 @@ class Service extends ServiceTemplateInformation
     }
 
     /**
+     * @param TblDivisionCourse $tblDivisionCourse
+     * @param TblCertificateType $tblCertificateType
+     *
+     * @return TblPrepareCertificate[]
+     */
+    public function getPrepareAllByDivisionCourseAndCertificateType(TblDivisionCourse $tblDivisionCourse, TblCertificateType $tblCertificateType): array
+    {
+        return (new Data($this->getBinding()))->getPrepareAllByDivisionCourseAndCertificateType($tblDivisionCourse, $tblCertificateType);
+    }
+
+    /**
+     * @param TblDivisionCourse $tblDivisionCourse
+     *
+     * @return TblPrepareCertificate[]
+     */
+    public function getPrepareAllByDivisionCourseAndCompetenceCertificate(TblDivisionCourse $tblDivisionCourse): array
+    {
+        $tblPrepareList = [];
+        if (($tblCertificateTypeHalfYearCompetence = Generator::useService()->getCertificateTypeByIdentifier('SKILL_HALF_YEAR'))
+            && ($tblCertificateTypeYearCompetence = Generator::useService()->getCertificateTypeByIdentifier('SKILL_YEAR'))
+        ) {
+            $tblPrepareList = $this->getPrepareAllByDivisionCourseAndCertificateType($tblDivisionCourse, $tblCertificateTypeHalfYearCompetence);
+            $tblPrepareList = array_merge($tblPrepareList,
+                $this->getPrepareAllByDivisionCourseAndCertificateType($tblDivisionCourse, $tblCertificateTypeYearCompetence));
+        }
+
+        return $tblPrepareList;
+    }
+
+    /**
      * @param array $tblEntityList
      *
      * @return bool

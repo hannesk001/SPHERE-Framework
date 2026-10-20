@@ -4,6 +4,7 @@ namespace SPHERE\Application\Api\Education\Competence;
 
 use SPHERE\Application\Api\ApiTrait;
 use SPHERE\Application\Api\Dispatcher;
+use SPHERE\Application\Education\Certificate\Prepare\Prepare;
 use SPHERE\Application\Education\Competence\SkillRate\SkillRate;
 use SPHERE\Application\Education\Lesson\DivisionCourse\DivisionCourse;
 use SPHERE\Application\Education\Lesson\Subject\Subject;
@@ -69,6 +70,8 @@ class ApiSkillRate extends Extension implements IApiInterface
         $Dispatcher->registerMethod('loadEditDivisionCourseContent');
         $Dispatcher->registerMethod('loadEditDivisionCourseSkillRateContent');
         $Dispatcher->registerMethod('saveEditDivisionCourseSkillRate');
+        $Dispatcher->registerMethod('loadEditDivisionCourseRemarkContent');
+        $Dispatcher->registerMethod('saveEditDivisionCourseRemark');
 
         return $Dispatcher->callMethod($Method);
     }
@@ -1184,5 +1187,99 @@ class ApiSkillRate extends Extension implements IApiInterface
 
         return SkillRate::useService()->createDivisionCourseSkillRateList(
             $tblDivisionCourse, $tblSubject ?: null, $SelectedYearId, $Interdisciplinary === 'true', $Data);
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $SubjectId
+     * @param $PrepareId
+     * @param string $Interdisciplinary
+     *
+     * @return Pipeline
+     */
+    public static function pipelineLoadEditDivisionCourseRemarkContent($DivisionCourseId, $SubjectId, $PrepareId, string $Interdisciplinary = 'false'): Pipeline
+    {
+        $Pipeline = new Pipeline(false);
+        $ModalEmitter = new ServerEmitter(self::receiverBlock('', 'Content'), self::getEndpoint());
+        $ModalEmitter->setGetPayload(array(
+            self::API_TARGET => 'loadEditDivisionCourseRemarkContent',
+        ));
+        $ModalEmitter->setPostPayload(array(
+            'DivisionCourseId' => $DivisionCourseId,
+            'SubjectId' => $SubjectId,
+            'PrepareId' => $PrepareId,
+            'Interdisciplinary' => $Interdisciplinary
+        ));
+        $ModalEmitter->setLoadingMessage("Daten werden geladen");
+        $Pipeline->appendEmitter($ModalEmitter);
+
+        return $Pipeline;
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $SubjectId
+     * @param $PrepareId
+     * @param $Interdisciplinary
+     *
+     * @return string
+     * @noinspection PhpUnused
+     */
+    public function loadEditDivisionCourseRemarkContent($DivisionCourseId, $SubjectId, $PrepareId, $Interdisciplinary): string
+    {
+        return SkillRate::useFrontend()->loadEditDivisionCourseRemarkContent($DivisionCourseId, $SubjectId, $PrepareId, $Interdisciplinary === 'true');
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $SubjectId
+     * @param $PrepareId
+     * @param string $Interdisciplinary
+     *
+     * @return Pipeline
+     */
+    public static function pipelineSaveEditDivisionCourseRemark(
+        $DivisionCourseId, $SubjectId, $PrepareId, string $Interdisciplinary = 'false'
+    ): Pipeline {
+        $Pipeline = new Pipeline(false);
+        $ModalEmitter = new ServerEmitter(self::receiverBlock('', 'Content'), self::getEndpoint());
+        $ModalEmitter->setGetPayload(array(
+            self::API_TARGET => 'saveEditDivisionCourseRemark',
+        ));
+        $ModalEmitter->setPostPayload(array(
+            'DivisionCourseId' => $DivisionCourseId,
+            'SubjectId' => $SubjectId,
+            'PrepareId' => $PrepareId,
+            'Interdisciplinary' => $Interdisciplinary
+        ));
+        $ModalEmitter->setLoadingMessage("Daten werden geladen");
+        $Pipeline->appendEmitter($ModalEmitter);
+
+        return $Pipeline;
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $SubjectId
+     * @param $PrepareId
+     * @param $Interdisciplinary
+     * @param null $Data
+     *
+     * @return string
+     *
+     * @noinspection PhpUnused
+     */
+    public function saveEditDivisionCourseRemark($DivisionCourseId, $SubjectId, $PrepareId, $Interdisciplinary, $Data = null): string
+    {
+        if (!($tblDivisionCourse = DivisionCourse::useService()->getDivisionCourseById($DivisionCourseId))) {
+            return new Danger('Kurs nicht gefunden.', new Exclamation());
+        }
+        if (!($tblPrepare = Prepare::useService()->getPrepareById($PrepareId))) {
+            return new Danger('Zeugnisauftrag nicht gefunden.', new Exclamation());
+        }
+        $tblSubject = $SubjectId ? Subject::useService()->getSubjectById($SubjectId) : null;
+
+        return SkillRate::useService()->createDivisionCourseRemarkList(
+            $tblDivisionCourse, $tblPrepare, $tblSubject ?: null, $Interdisciplinary === 'true', $Data);
     }
 }

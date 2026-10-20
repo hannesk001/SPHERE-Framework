@@ -10,6 +10,7 @@ use SPHERE\Application\Education\Competence\SkillGrid\Service\Entity\TblSkill;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkill;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRate;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRateType;
+use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSubjectRemark;
 use SPHERE\Application\Education\Lesson\Subject\Service\Entity\TblSubject;
 use SPHERE\Application\Education\Lesson\Subject\Subject;
 use SPHERE\Application\Education\Lesson\Term\Service\Entity\TblYear;
@@ -484,5 +485,63 @@ class Data extends AbstractData
             $Manager->flushCache();
             Protocol::useService()->flushBulkEntries();
         }
+    }
+
+    /**
+     * @param TblPrepareCertificate|null $tblPrepareCertificate
+     * @param TblPerson $tblPerson
+     * @param TblSubject|null $tblSubject
+     *
+     * @return false|TblStudentSubjectRemark
+     */
+    public function getStudentSubjectRemarkByStudent(
+         ?TblPrepareCertificate $tblPrepareCertificate, TblPerson $tblPerson, ?TblSubject $tblSubject
+    ): false|TblStudentSubjectRemark {
+        return $this->getCachedEntityBy(__METHOD__, $this->getEntityManager(), 'TblStudentSubjectRemark', [
+            TblStudentSubjectRemark::SERVICE_TBL_PREPARE_CERTIFICATE => $tblPrepareCertificate?->getId(),
+            TblStudentSubjectRemark::SERVICE_TBL_PERSON => $tblPerson->getId(),
+            TblStudentSubjectRemark::SERVICE_TBL_SUBJECT => $tblSubject?->getId()
+        ]);
+    }
+
+    /**
+     * @param TblPrepareCertificate|null $tblPrepareCertificate
+     * @param TblSubject|null $tblSubject
+     *
+     * @return false|TblStudentSubjectRemark[]
+     */
+    public function getStudentSubjectRemarkByPrepare(
+        ?TblPrepareCertificate $tblPrepareCertificate, ?TblSubject $tblSubject
+    ): false|array {
+        return $this->getCachedEntityListBy(__METHOD__, $this->getEntityManager(), 'TblStudentSubjectRemark', [
+            TblStudentSubjectRemark::SERVICE_TBL_PREPARE_CERTIFICATE => $tblPrepareCertificate?->getId(),
+            TblStudentSubjectRemark::SERVICE_TBL_SUBJECT => $tblSubject?->getId()
+        ]);
+    }
+
+    /**
+     * @param array $tblStudentSubjectRemarkList
+     *
+     * @return void
+     */
+    public function updateStudentSubjectRemarkListBulk(array $tblStudentSubjectRemarkList): void
+    {
+        $Manager = $this->getConnection()->getEntityManager();
+        /** @var TblStudentSubjectRemark $tblStudentSubjectRemark */
+        foreach ($tblStudentSubjectRemarkList as $tblStudentSubjectRemark) {
+            /** @var TblStudentSubjectRemark $Entity */
+            $Entity = $Manager->getEntityById('TblStudentSubjectRemark', $tblStudentSubjectRemark->getId());
+            $Protocol = clone $Entity;
+            if (null !== $Entity) {
+                $Entity->setRemark($tblStudentSubjectRemark->getRemark());
+                $Entity->setServiceTblPersonTeacher($tblStudentSubjectRemark->getServiceTblPersonTeacher() ?: null);
+
+                $Manager->bulkSaveEntity($Entity);
+                Protocol::useService()->createUpdateEntry($this->getConnection()->getDatabase(), $Protocol, $Entity, true);
+            }
+        }
+
+        $Manager->flushCache();
+        Protocol::useService()->flushBulkEntries();
     }
 }

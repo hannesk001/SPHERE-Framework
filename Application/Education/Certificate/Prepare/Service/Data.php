@@ -1345,6 +1345,35 @@ class Data extends DataLeave
     }
 
     /**
+     * @param TblDivisionCourse $tblDivisionCourse
+     * @param TblCertificateType $tblCertificateType
+     *
+     * @return TblPrepareCertificate[]
+     */
+    public function getPrepareAllByDivisionCourseAndCertificateType(TblDivisionCourse $tblDivisionCourse, TblCertificateType $tblCertificateType): array
+    {
+        $Manager = $this->getEntityManager();
+        $queryBuilder = $Manager->getQueryBuilder();
+
+        $query = $queryBuilder->select('pc')
+            ->from(TblPrepareCertificate::class, 'pc')
+            ->leftJoin(TblGenerateCertificate::class, 'gc', 'WITH', 'pc.serviceTblGenerateCertificate = gc.Id')
+            ->where(
+                $queryBuilder->expr()->andX(
+                    $queryBuilder->expr()->eq('pc.serviceTblDivision', '?1'),
+                    $queryBuilder->expr()->eq('gc.serviceTblCertificateType', '?2'),
+                    $queryBuilder->expr()->isNull('pc.EntityRemove')
+                ),
+            )
+            ->setParameter(1, $tblDivisionCourse->getId())
+            ->setParameter(2, $tblCertificateType->getId())
+            ->orderBy('gc.Date', 'ASC')
+            ->getQuery();
+
+        return $query->getResult();
+    }
+
+    /**
      * @param array $tblEntityList
      *
      * @return bool
