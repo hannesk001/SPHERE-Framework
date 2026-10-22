@@ -208,6 +208,18 @@ class Frontend extends Extension implements IFrontendInterface
                     }
                 }
             }
+
+            // Fach-Bemerkung anzeigen
+            if (($tblStudentSubjectRemarkList = SkillRate::useService()->getStudentSubjectRemarkListByStudentAndYear($tblPerson, $tblYear, $tblSubject))) {
+                foreach ($tblStudentSubjectRemarkList as $tblStudentSubjectRemark) {
+                    if (($tblPrepare = $tblStudentSubjectRemark->getServiceTblPrepareCertificate())) {
+                        $text = ($isInterdisciplinary ? 'Fächerübergreifende ' : 'Fach-') . 'Bemerkung';
+                        $tblCertificateType = $tblPrepare->getCertificateType();
+                        $tooltip = $text . ' für ' . ($tblCertificateType ? $tblCertificateType->getName() : '') . ' (' . $tblPrepare->getDate() . ')';
+                        $content .= new Panel($tooltip, $tblStudentSubjectRemark->getRemark(), Panel::PANEL_TYPE_PRIMARY);
+                    }
+                }
+            }
         }
 
         return $content;

@@ -5,6 +5,8 @@ namespace SPHERE\Application\Education\Competence\SkillRate;
 use DateTime;
 use NumberFormatter;
 use SPHERE\Application\Api\Education\Competence\ApiSkillRate;
+use SPHERE\Application\Education\Certificate\Generator\Generator;
+use SPHERE\Application\Education\Certificate\Prepare\Prepare;
 use SPHERE\Application\Education\Certificate\Prepare\Service\Entity\TblPrepareCertificate;
 use SPHERE\Application\Education\Competence\ScoreType\ScoreType;
 use SPHERE\Application\Education\Competence\SkillGrid\Service\Entity\TblSkill;
@@ -249,6 +251,42 @@ class Service extends AbstractService
         ?TblPrepareCertificate $tblPrepareCertificate, ?TblSubject $tblSubject
     ): false|array {
         return (new Data($this->getBinding()))->getStudentSubjectRemarkByPrepare($tblPrepareCertificate, $tblSubject);
+    }
+
+    /**
+     * @param TblPerson $tblPerson
+     * @param TblYear $tblYear
+     * @param TblSubject|null $tblSubject
+     *
+     * @return TblStudentSubjectRemark[]
+     */
+    public function getStudentSubjectRemarkListByStudentAndYear(TblPerson $tblPerson, TblYear $tblYear, ?TblSubject $tblSubject): array
+    {
+        $tblStudentSubjectRemarkList = [];
+        if (($tblCertificateType = Generator::useService()->getCertificateTypeByIdentifier('SKILL_HALF_YEAR'))
+            && ($tblPrepareStudentList = Prepare::useService()->getPrepareStudentListByPersonAndCertificateTypeAndYear($tblPerson, $tblCertificateType, $tblYear, 'ASC'))
+        ) {
+            foreach ($tblPrepareStudentList as $tblPrepareStudent) {
+                if (($tblPrepare = $tblPrepareStudent->getTblPrepareCertificate())
+                    && ($tblStudentSubjectRemark = $this->getStudentSubjectRemarkByStudent($tblPrepare, $tblPerson, $tblSubject))
+                ) {
+                    $tblStudentSubjectRemarkList[] = $tblStudentSubjectRemark;
+                }
+            }
+        }
+        if (($tblCertificateType = Generator::useService()->getCertificateTypeByIdentifier('SKILL_YEAR'))
+            && ($tblPrepareStudentList = Prepare::useService()->getPrepareStudentListByPersonAndCertificateTypeAndYear($tblPerson, $tblCertificateType, $tblYear, 'ASC'))
+        ) {
+            foreach ($tblPrepareStudentList as $tblPrepareStudent) {
+                if (($tblPrepare = $tblPrepareStudent->getTblPrepareCertificate())
+                    && ($tblStudentSubjectRemark = $this->getStudentSubjectRemarkByStudent($tblPrepare, $tblPerson, $tblSubject))
+                ) {
+                    $tblStudentSubjectRemarkList[] = $tblStudentSubjectRemark;
+                }
+            }
+        }
+
+        return $tblStudentSubjectRemarkList;
     }
 
     /**

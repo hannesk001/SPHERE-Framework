@@ -56,6 +56,7 @@ use SPHERE\Common\Frontend\Text\Repository\Bold;
 use SPHERE\Common\Frontend\Text\Repository\Muted;
 use SPHERE\Common\Frontend\Text\Repository\Small;
 use SPHERE\Common\Frontend\Text\Repository\Success;
+use SPHERE\Common\Frontend\Text\Repository\ToolTip;
 use SPHERE\Common\Frontend\Text\Repository\Warning as WarningText;
 use SPHERE\Common\Window\Stage;
 use SPHERE\System\Extension\Extension;
@@ -156,6 +157,34 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
             $hasCourse = !empty($courseList);
             $headerList = $gradeFrontend->getGradeBookPreHeaderList($hasPicture, $hasIntegration, $hasCourse);
             $headerList['SkillRates'] = $gradeFrontend->getTableColumnHead('Kompetenzbewertung');
+
+            // Fach-Bemerkung fürs Zeugnis, erstmal nur fürs Fach und nicht für fächerübergreifend
+            $buttonsPrepare = '';
+            $remarkList = [];
+            $tblPrepareList = [];
+            if (!$IsInterdisciplinary) {
+                $tblPrepareList = Prepare::useService()->getPrepareAllByDivisionCourseAndCompetenceCertificate($tblDivisionCourse);
+                foreach ($tblPrepareList as $tblPrepare) {
+                    $text = ($IsInterdisciplinary ? 'Fächerübergreifende ' : 'Fach-') . 'Bemerkung';
+                    $tblCertificateType = $tblPrepare->getCertificateType();
+                    $tooltip = $text . ' für ' . ($tblCertificateType ? $tblCertificateType->getName() : '') . ' (' . $tblPrepare->getDate() . ')';
+                    $buttonsPrepare .= (new Primary($text, ApiSkillRate::getEndpoint(),
+                        new Comment(), [], $tooltip))
+                        ->ajaxPipelineOnClick(ApiSkillRate::pipelineLoadEditDivisionCourseRemarkContent(
+                            $DivisionCourseId, $SubjectId, $tblPrepare->getId(), $IsInterdisciplinary ? 'true' : 'false'
+                        ));
+
+                    $headerList['Prepare_' . $tblPrepare->getId()] = $gradeFrontend->getTableColumnHead(new ToolTip($text . ' (' . $tblPrepare->getDate() . ')', $tooltip));
+                    if (($tblStudentSubjectRemarkList = SkillRate::useService()->getStudentSubjectRemarkByPrepare($tblPrepare, $tblSubject))) {
+                        foreach ($tblStudentSubjectRemarkList as $tblStudentSubjectRemark) {
+                            if (($tblPerson = $tblStudentSubjectRemark->getServiceTblPerson())) {
+                                $remarkList[$tblPrepare->getId()][$tblPerson->getId()] = $tblStudentSubjectRemark->getRemark();
+                            }
+                        }
+                    }
+                }
+            }
+
             $headerList['Option'] = $gradeFrontend->getTableColumnHead('&nbsp;');
 
             $count = 0;
@@ -170,6 +199,12 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
                     $this->getDisplayStudentSkills(
                         $tblPerson, $tblYear, $IsInterdisciplinary ? null : $tblSubject, $IsInterdisciplinary ? $tblSubject : null, $skillList)
                 );
+
+                foreach ($tblPrepareList as $tblPrepare) {
+                    $bodyList[$tblPerson->getId()]['Prepare_' . $tblPrepare->getId()] = $gradeFrontend->getTableColumnBody(
+                        $remarkList[$tblPrepare->getId()][$tblPerson->getId()] ?? '&nbsp;'
+                    );
+                }
 
                 $bodyList[$tblPerson->getId()]['Option'] = $gradeFrontend->getTableColumnBody(
                     new Standard('', '/Education/Competence/SkillRate/Student', new ClipBoard(), [
@@ -187,22 +222,6 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
                     null,
                     '8%'
                 );
-            }
-
-            // Fach-Bemerkung fürs Zeugnis, erstmal nur fürs Fach und nicht für fächerübergreifend
-            $buttonsPrepare = '';
-            if (!$IsInterdisciplinary) {
-                $tblPrepareList = Prepare::useService()->getPrepareAllByDivisionCourseAndCompetenceCertificate($tblDivisionCourse);
-                foreach ($tblPrepareList as $tblPrepare) {
-                    $text = ($IsInterdisciplinary ? 'Fächerübergreifende ' : 'Fach-') . 'Bemerkung';
-                    $tblCertificateType = $tblPrepare->getCertificateType();
-                    $tooltip = $text . ' für ' . ($tblCertificateType ? $tblCertificateType->getName() : '') . ' (' . $tblPrepare->getDate() . ')';
-                    $buttonsPrepare .= (new Primary($text, ApiSkillRate::getEndpoint(),
-                        new Comment(), [], $tooltip))
-                        ->ajaxPipelineOnClick(ApiSkillRate::pipelineLoadEditDivisionCourseRemarkContent(
-                            $DivisionCourseId, $SubjectId, $tblPrepare->getId(), $IsInterdisciplinary ? 'true' : 'false'
-                        ));
-                }
             }
 
             $actions = new Layout(new LayoutGroup(new LayoutRow(array(

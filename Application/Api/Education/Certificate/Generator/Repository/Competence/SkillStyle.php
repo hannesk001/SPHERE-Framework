@@ -207,10 +207,11 @@ abstract class SkillStyle extends Certificate
             }
         }
 
-        // ToDo Bemerkung für Fach setzen
-        if ($tblSubject?->getName() == 'Deutsch') {
-            $remarkSubject = 'Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut
-                labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores';
+        // Bemerkung für Fach setzen
+        if (($tblPrepare = $this->getTblPrepareCertificate())
+            && ($tblStudentSubjectRemark = SkillRate::useService()->getStudentSubjectRemarkByStudent($tblPrepare, $tblPerson, $tblSubject))
+        ) {
+            $remarkSubject = $tblStudentSubjectRemark->getRemark();
 
             $minHeightRequired = (int) ((strlen($remarkSubject) / 100) * 16);
             $this->checkNewPageBySkillContent($minHeightRequired > 16 ?: 20);
