@@ -64,6 +64,9 @@ class ApiSkillRate extends Extension implements IApiInterface
         $Dispatcher->registerMethod('openCreateStudentSkillModal');
         $Dispatcher->registerMethod('saveCreateStudentSkill');
 
+        $Dispatcher->registerMethod('loadEditStudentSkillCertificateContent');
+        $Dispatcher->registerMethod('saveEditStudentSkillCertificate');
+
         // DivisionCourse
         $Dispatcher->registerMethod('checkInActive');
         $Dispatcher->registerMethod('loadViewDivisionCourseContent');
@@ -1281,5 +1284,107 @@ class ApiSkillRate extends Extension implements IApiInterface
 
         return SkillRate::useService()->createDivisionCourseRemarkList(
             $tblDivisionCourse, $tblPrepare, $tblSubject ?: null, $Interdisciplinary === 'true', $Data);
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $PersonId
+     * @param $SubjectId
+     * @param $SelectedYearId
+     * @param string $Interdisciplinary
+     *
+     * @return Pipeline
+     */
+    public static function pipelineLoadEditStudentSkillCertificateContent($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId, string $Interdisciplinary = 'false'): Pipeline
+    {
+        $Pipeline = new Pipeline(false);
+        $ModalEmitter = new ServerEmitter(self::receiverBlock('', 'Content'), self::getEndpoint());
+        $ModalEmitter->setGetPayload(array(
+            self::API_TARGET => 'loadEditStudentSkillCertificateContent',
+        ));
+        $ModalEmitter->setPostPayload(array(
+            'DivisionCourseId' => $DivisionCourseId,
+            'PersonId' => $PersonId,
+            'SubjectId' => $SubjectId,
+            'SelectedYearId' => $SelectedYearId,
+            'Interdisciplinary' => $Interdisciplinary
+        ));
+        $ModalEmitter->setLoadingMessage("Daten werden geladen");
+        $Pipeline->appendEmitter($ModalEmitter);
+
+        return $Pipeline;
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $PersonId
+     * @param $SubjectId
+     * @param $SelectedYearId
+     * @param $Interdisciplinary
+     *
+     * @return string
+     * @noinspection PhpUnused
+     */
+    public function loadEditStudentSkillCertificateContent($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId, $Interdisciplinary): string
+    {
+        return SkillRate::useFrontend()->loadEditStudentSkillCertificateContent($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId, $Interdisciplinary === 'true');
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $PersonId
+     * @param $SubjectId
+     * @param $SelectedYearId
+     * @param string $Interdisciplinary
+     *
+     * @return Pipeline
+     */
+    public static function pipelineSaveEditStudentSkillCertificate($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId, string $Interdisciplinary = 'false'): Pipeline
+    {
+        $Pipeline = new Pipeline(false);
+        $ModalEmitter = new ServerEmitter(self::receiverBlock('', 'Content'), self::getEndpoint());
+        $ModalEmitter->setGetPayload(array(
+            self::API_TARGET => 'saveEditStudentSkillCertificate',
+        ));
+        $ModalEmitter->setPostPayload(array(
+            'DivisionCourseId' => $DivisionCourseId,
+            'PersonId' => $PersonId,
+            'SubjectId' => $SubjectId,
+            'SelectedYearId' => $SelectedYearId,
+            'Interdisciplinary' => $Interdisciplinary
+        ));
+        $ModalEmitter->setLoadingMessage('Daten werden geladen');
+        $Pipeline->appendEmitter($ModalEmitter);
+
+        return $Pipeline;
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $PersonId
+     * @param $SubjectId
+     * @param $SelectedYearId
+     * @param $Interdisciplinary
+     * @param null $Data
+     *
+     * @return string
+     * @noinspection PhpUnused
+     */
+    public function saveEditStudentSkillCertificate($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId, $Interdisciplinary, $Data = null): string
+    {
+        if (!($tblDivisionCourse = DivisionCourse::useService()->getDivisionCourseById($DivisionCourseId))) {
+            return new Danger('Kurs nicht gefunden.', new Exclamation());
+        }
+        if (!($tblPerson = Person::useService()->getPersonById($PersonId))) {
+            return new Danger('Schüler wurde nicht gefunden!', new Exclamation());
+        }
+
+        $IsInterdisciplinary = $Interdisciplinary === 'true';
+        $tblSubject = null;
+        if (!$IsInterdisciplinary) {
+            $tblSubject = $SubjectId ? Subject::useService()->getSubjectById($SubjectId) : null;
+        }
+
+        return SkillRate::useService()->createStudentSkillCertificateList($tblDivisionCourse, $tblPerson, $tblSubject ?: null, $SelectedYearId, $SubjectId, $Data);
     }
 }

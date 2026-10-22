@@ -695,7 +695,7 @@ class FrontendDivisionCourse extends Extension implements IFrontendInterface
                 (new Form(new FormGroup([
                     new FormRow(
                         new FormColumn(
-                            $gradeFrontend->getTableCustom($headerList, $bodyList)
+                            $gradeFrontend->getTableCustom($headerList, $bodyList, 'TableCustom2')
                         )
                     ),
                     new FormRow([

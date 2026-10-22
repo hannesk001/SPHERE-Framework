@@ -25,6 +25,7 @@ class Setup extends AbstractSetup
         $tblStudentSkillRateType = $this->setTableStudentSkillRateType($schema);
         $this->setTableStudentSkillRate($schema, $tblStudentSkill, $tblStudentSkillRateType);
         $this->setTableStudentSubjectRemark($schema);
+        $this->setTableStudentSkillCertificate($schema, $tblStudentSkill);
 
         /**
          * Migration & Protocol
@@ -127,5 +128,18 @@ class Setup extends AbstractSetup
 
         $this->createIndex($table, ['serviceTblPrepareCertificate', 'serviceTblPerson', 'serviceTblSubject']);
         $this->createIndex($table, ['serviceTblPrepareCertificate', 'serviceTblSubject'], false);
+    }
+
+    /**
+     * @param Schema $schema
+     * @param Table $tblStudentSkill
+     *
+     * @return void
+     */
+    private function setTableStudentSkillCertificate(Schema $schema, Table $tblStudentSkill): void
+    {
+        $table = $this->createTable($schema, 'tblCompetenceStudentSkillCertificate');
+
+        $this->createForeignKey($table, $tblStudentSkill);
     }
 }

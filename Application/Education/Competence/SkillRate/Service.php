@@ -13,6 +13,7 @@ use SPHERE\Application\Education\Competence\SkillGrid\Service\Entity\TblSkill;
 use SPHERE\Application\Education\Competence\SkillGrid\SkillGrid;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Data;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkill;
+use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillCertificate;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRate;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRateType;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSubjectRemark;
@@ -251,6 +252,16 @@ class Service extends AbstractService
         ?TblPrepareCertificate $tblPrepareCertificate, ?TblSubject $tblSubject
     ): false|array {
         return (new Data($this->getBinding()))->getStudentSubjectRemarkByPrepare($tblPrepareCertificate, $tblSubject);
+    }
+
+    /**
+     * @param TblStudentSkill $tblStudentSkill
+     *
+     * @return false|TblStudentSkill
+     */
+    public function getStudentSkillCertificateByStudentSkill(TblStudentSkill $tblStudentSkill): false|TblStudentSkillCertificate
+    {
+        return (new Data($this->getBinding()))->getStudentSkillCertificateByStudentSkill($tblStudentSkill);
     }
 
     /**
@@ -1206,6 +1217,11 @@ class Service extends AbstractService
         $skillAreaList = [];
         /** @var TblStudentSkill $tblStudentSkill */
         foreach ($tblStudentSkillList as $tblStudentSkill) {
+            // Bei Zeugnissen abgewählte Kompetenzen nicht mit anzeigen, standardmäßig werden alle Kompetenzen angezeigt
+            if ($tblPrepareCertificate && $this->getStudentSkillCertificateByStudentSkill($tblStudentSkill)) {
+                continue;
+            }
+
             // bei fächerübergreifenden Kompetenzen wir ein Durchschnitt über alle bewerteten Fächer gebildet (zuvor Durchschnitt für ein Fach)
             $displayLast = $isInterdisciplinary
                 ? SkillRate::useService()->getStudentSkillRateLastOrAverageValueForInterdisciplinaryOverAllSubjects($tblStudentSkill, $tblPrepareCertificate)
@@ -1339,5 +1355,57 @@ class Service extends AbstractService
             . new Redirect('/Education/Competence/SkillRate/DivisionCourse', Redirect::TIMEOUT_SUCCESS,
                 ['DivisionCourseId' => $tblDivisionCourse->getId(), 'SubjectId' => $tblSubject?->getId(), 'SelectedYearId' => null,
                     'IsInterdisciplinary' => $IsInterdisciplinary]);
+    }
+
+    /**
+     * @param TblDivisionCourse $tblDivisionCourse
+     * @param TblPerson $tblPerson
+     * @param TblSubject|null $tblSubject
+     * @param $SelectedYearId
+     * @param $SubjectId
+     * @param $Data
+     *
+     * @return string
+     */
+    public function createStudentSkillCertificateList(
+        TblDivisionCourse $tblDivisionCourse, TblPerson $tblPerson, ?TblSubject $tblSubject, $SelectedYearId, $SubjectId, $Data): string
+    {
+        $createList = [];
+        $deleteList = [];
+        // create
+        if ($Data) {
+            foreach ($Data as $studentSkillId => $value) {
+                if (($tblStudentSkill = $this->getStudentSkillById($studentSkillId))
+                    && !$this->getStudentSkillCertificateByStudentSkill($tblStudentSkill)
+                ) {
+                    $tblStudentSkillCertificate = new TblStudentSkillCertificate();
+                    $tblStudentSkillCertificate->setTblStudentSkill($tblStudentSkill);
+                    $createList[$tblStudentSkill->getId()] = $tblStudentSkillCertificate;
+                }
+            }
+        }
+
+        // delete
+        if (($tblYear = $tblDivisionCourse->getServiceTblYear())) {
+            $tblStudentSkillList = SkillRate::useService()->getStudentSkillListByPersonAndYear($tblPerson, $tblYear, $tblSubject);
+            foreach ($tblStudentSkillList as $tblStudentSkill) {
+                if (!isset($Data[$tblStudentSkill->getId()])
+                    && ($tblStudentSkillCertificate = $this->getStudentSkillCertificateByStudentSkill($tblStudentSkill))
+                ) {
+                    $deleteList[] = $tblStudentSkillCertificate;
+                }
+            }
+        }
+
+        if ($createList) {
+            (new Data($this->getBinding()))->createEntityListBulk($createList);
+        }
+        if ($deleteList) {
+            (new Data($this->getBinding()))->deleteEntityListBulk($deleteList);
+        }
+
+        return new Success('Die Daten wurde erfolgreich gespeichert.')
+            . ApiSkillRate::pipelineLoadViewStudentContent(
+                $tblDivisionCourse->getId(), $tblPerson->getId(), $SubjectId, $SelectedYearId, 'false', $tblSubject ? 'false' : 'true');
     }
 }

@@ -175,10 +175,11 @@ abstract class FrontendBasic extends Extension implements IFrontendInterface
     /**
      * @param array $headerList
      * @param array $bodyList
+     * @param string $twig
      *
      * @return Table
      */
-    public function getTableCustom(array $headerList, array $bodyList): Table
+    public function getTableCustom(array $headerList, array $bodyList, string $twig = 'TableCustom'): Table
     {
         $tableHead = new TableHead(new TableRow($headerList));
         $rows = array();
@@ -187,7 +188,7 @@ abstract class FrontendBasic extends Extension implements IFrontendInterface
         }
         $tableBody = new TableBody($rows);
 
-        return new Table($tableHead, $tableBody, null, false, null, 'TableCustom');
+        return new Table($tableHead, $tableBody, null, false, null, $twig);
     }
 
     /**

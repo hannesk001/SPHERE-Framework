@@ -8,6 +8,7 @@ use SPHERE\Application\Education\Competence\ScoreType\Service\Entity\TblScoreTyp
 use SPHERE\Application\Education\Competence\ScoreType\Service\Entity\TblScoreTypeItem;
 use SPHERE\Application\Education\Competence\SkillGrid\Service\Entity\TblSkill;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkill;
+use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillCertificate;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRate;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSkillRateType;
 use SPHERE\Application\Education\Competence\SkillRate\Service\Entity\TblStudentSubjectRemark;
@@ -543,5 +544,17 @@ class Data extends AbstractData
 
         $Manager->flushCache();
         Protocol::useService()->flushBulkEntries();
+    }
+
+    /**
+     * @param TblStudentSkill $tblStudentSkill
+     *
+     * @return false|TblStudentSkill
+     */
+    public function getStudentSkillCertificateByStudentSkill(TblStudentSkill $tblStudentSkill): false|TblStudentSkillCertificate
+    {
+        return $this->getCachedEntityBy(__METHOD__, $this->getEntityManager(), 'TblStudentSkillCertificate', [
+            TblStudentSkillCertificate::TBL_STUDENT_SKILL => $tblStudentSkill->getId()
+        ]);
     }
 }

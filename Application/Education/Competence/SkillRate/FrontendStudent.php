@@ -231,20 +231,23 @@ class FrontendStudent extends FrontendPrepareCertificate
                 ->ajaxPipelineOnClick(ApiSupportReadOnly::pipelineOpenOverViewModal($tblPerson->getId()));
         }
 
+        $textCompetence = 'Komp.';
         $buttons = '';
         if ($isEdit) {
-            $buttons = (new Primary('Kompetenzen bewerten', ApiSkillRate::getEndpoint(), new ClipBoard()))
+            $buttons = (new Primary($textCompetence . ' bewerten', ApiSkillRate::getEndpoint(), new ClipBoard()))
                 ->ajaxPipelineOnClick(ApiSkillRate::pipelineLoadEditStudentContent(
                     $DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId, $IsInterdisciplinary ? 'true' : 'false'));
 
             if (!$IsInterdisciplinary) {
-                $buttons .= (new Primary('Kompetenz umbenennen', ApiSkillRate::getEndpoint(), new Edit()))
+                $buttons .= (new Primary($textCompetence . ' umbenennen', ApiSkillRate::getEndpoint(), new Edit()))
                         ->ajaxPipelineOnClick(ApiSkillRate::pipelineOpenRenameStudentSkillModal($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId))
-                    . (new Primary('Kompetenzen auswählen', ApiSkillRate::getEndpoint(), new Select(),
+                    . (new Primary($textCompetence . ' auswählen', ApiSkillRate::getEndpoint(), new Select(),
                         [], 'Kompetenzen von Kompetenzrastern einer anderen Klassenstufe wählen'))
                         ->ajaxPipelineOnClick(ApiSkillRate::pipelineOpenAddStudentSkillModal($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId))
-                    . (new Primary('Kompetenz hinzufügen', ApiSkillRate::getEndpoint(), new Plus()))
-                        ->ajaxPipelineOnClick(ApiSkillRate::pipelineOpenCreateStudentSkillModal($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId));
+                    . (new Primary($textCompetence . ' hinzufügen', ApiSkillRate::getEndpoint(), new Plus()))
+                        ->ajaxPipelineOnClick(ApiSkillRate::pipelineOpenCreateStudentSkillModal($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId))
+                    . (new Primary($textCompetence . ' für Zeugnisse', ApiSkillRate::getEndpoint(), new Plus(), [], 'Kompetenzen für Zeugnisse abwählen'))
+                        ->ajaxPipelineOnClick(ApiSkillRate::pipelineLoadEditStudentSkillCertificateContent($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId));
             }
         }
 
@@ -1116,5 +1119,129 @@ class FrontendStudent extends FrontendPrepareCertificate
 
         return new Title(new Plus() . ' Kompetenz hinzufügen')
             . new Well($form);
+    }
+
+    /**
+     * @param $DivisionCourseId
+     * @param $PersonId
+     * @param $SubjectId
+     * @param $SelectedYearId
+     * @param bool $IsInterdisciplinary
+     *
+     * @return string
+     */
+    public function loadEditStudentSkillCertificateContent($DivisionCourseId, $PersonId, $SubjectId, $SelectedYearId, bool $IsInterdisciplinary = false): string
+    {
+        if (!($tblDivisionCourse = DivisionCourse::useService()->getDivisionCourseById($DivisionCourseId))) {
+            return new Danger('Kurs nicht gefunden.', new Exclamation());
+        }
+        if (!($tblPerson = Person::useService()->getPersonById($PersonId))) {
+            return new Danger('Schüler wurde nicht gefunden!', new Exclamation());
+        }
+
+        $tblSubject = null;
+        if (!$IsInterdisciplinary) {
+            $tblSubject = Subject::useService()->getSubjectById($SubjectId) ?: null;
+        }
+
+        return
+            new Title(
+                new Standard("Zurück", "/Education/Competence/SkillRate/Student", new ChevronLeft(),
+                    ['DivisionCourseId' => $DivisionCourseId, 'SubjectId' => $SubjectId, 'PersonId' => $PersonId, 'SelectedYearId' => $SelectedYearId,
+                        'IsInterdisciplinary' => $IsInterdisciplinary])
+                . "&nbsp;&nbsp;&nbsp;Kompetenzbewertung"
+                . new Muted(new Small(" Schüleransicht "))
+            )
+            . $this->getStudentHead($tblPerson, $tblDivisionCourse, $tblSubject)
+            . new Well($this->formStudentSkillCertificate($tblDivisionCourse, $tblPerson, $tblSubject, $SelectedYearId, $SubjectId));
+    }
+
+    /**
+     * @param TblDivisionCourse $tblDivisionCourse
+     * @param TblPerson $tblPerson
+     * @param TblSubject|null $tblSubject
+     * @param $SelectedYearId
+     * @param $SubjectId
+     *
+     * @return Form
+     */
+    public function formStudentSkillCertificate(
+        TblDivisionCourse $tblDivisionCourse, TblPerson $tblPerson, ?TblSubject $tblSubject, $SelectedYearId, $SubjectId): Form
+    {
+        $dataList = [];
+        if (($tblYear = $tblDivisionCourse->getServiceTblYear())) {
+            $tblStudentSkillList = SkillRate::useService()->getStudentSkillListByPersonAndYear($tblPerson, $tblYear, $tblSubject);
+            // post setzen
+            $global = $this->getGlobal();
+            foreach ($tblStudentSkillList as $tblStudentSkill) {
+                if (SkillRate::useService()->getStudentSkillCertificateByStudentSkill($tblStudentSkill)) {
+                    $global->POST['Data'][$tblStudentSkill->getId()] = 1;
+                }
+            }
+            $global->savePost();
+
+            foreach ($tblStudentSkillList as $tblStudentSkill) {
+                $skillAreaName = $tblStudentSkill->getSkillArea() ?: 'Ohne Kompetenzbereich';
+                $skillAreaIdentifier = preg_replace('/[^a-zA-Z0-9]/', '', $skillAreaName);
+                if (!isset($dataList[$skillAreaIdentifier])) {
+                    $dataList[$skillAreaIdentifier] = [
+                        'name' => $skillAreaName,
+                        'isBold' => false,
+                        'skills' => []
+                    ];
+                }
+
+                $isBold = false;
+                $tblSubjectForSkillRate = null;
+                if (!$tblStudentSkill->getServiceTblSubject()) {
+                    // ist fächerübergreifend → Fach wird mit an der Bewertung gespeichert
+                    $tblSubjectForSkillRate = Subject::useService()->getSubjectById($SubjectId) ?: null;
+                }
+                if (($displayLast = SkillRate::useService()->getToolTipStudentSkillRateLastOrAverage($tblStudentSkill, $tblSubjectForSkillRate))) {
+                    $dataList[$skillAreaIdentifier]['isBold'] = true;
+                    $isBold = true;
+                }
+                $skillLevel = $tblStudentSkill->getSkillLevel();
+                $skill = $tblStudentSkill->getSkill();
+
+                $displaySkill = ($skillLevel ? new Muted($skillLevel . ' ') : '')
+                    . ($isBold ? new Bold($skill) : $skill);
+
+                $dataList[$skillAreaIdentifier]['skills'][] = new Layout(new LayoutGroup(new LayoutRow([
+                    new LayoutColumn(
+                        new CheckBox('Data[' . $tblStudentSkill->getId() . ']', $displaySkill, 1)
+                        , 10),
+                    new LayoutColumn(
+                        $displayLast ? new PullRight($displayLast) : '&nbsp;'
+                        , 2)
+                ])));
+            }
+        }
+
+        $rows = [];
+        foreach ($dataList as $item) {
+            $rows[] = new FormRow(new FormColumn(new Panel(
+                $item['isBold'] ? new Bold($item['name']) : $item['name'],
+                $item['skills'],
+                Panel::PANEL_TYPE_INFO
+            )));
+        }
+
+        $rows[] = new FormRow(array(
+            new FormColumn(array(
+                new Container('&nbsp;'),
+                (new Primary('Speichern', ApiSkillRate::getEndpoint(), new Save()))
+                    ->ajaxPipelineOnClick(ApiSkillRate::pipelineSaveEditStudentSkillCertificate(
+                        $tblDivisionCourse->getId(), $tblPerson->getId(), $SubjectId, $SelectedYearId, $tblSubject ? 'false' : 'true')),
+                (new Standard('Abbrechen', ApiSkillRate::getEndpoint(), new Disable()))
+                    ->ajaxPipelineOnClick(ApiSkillRate::pipelineLoadViewStudentContent(
+                        $tblDivisionCourse->getId(), $tblPerson->getId(), $SubjectId, $SelectedYearId, 'false', $tblSubject ? 'false' : 'true')),
+            ))
+        ));
+
+        return (new Form(new FormGroup(
+            $rows,
+            new \SPHERE\Common\Frontend\Form\Repository\Title('Ausgewählte Kompetenzen werden nicht mit auf Zeugnissen abgebildet.'
+        ))))->disableSubmitAction();
     }
 }
